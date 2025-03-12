@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 from src.config import (
     TARGET_SIZE, BATCH_SIZE, NUM_WORKERS, DATASET_PATHS,
-    PRETRAIN_DATASET_NAME
+    PRETRAIN_DATASET_NAME, MEAN, STD
 )
 
 class FacialKeypointsDataset(Dataset):
@@ -45,9 +45,10 @@ class FacialKeypointsDataset(Dataset):
 
 def get_transform():
     return transforms.Compose([
-        transforms.Grayscale(num_output_channels=1),
+        transforms.Grayscale(num_output_channels=3),
         transforms.Resize((TARGET_SIZE, TARGET_SIZE)),
         transforms.ToTensor(),
+        transforms.Normalize(mean=MEAN, std=STD),
     ])
 
 def load_keypoints_data(csv_path):
