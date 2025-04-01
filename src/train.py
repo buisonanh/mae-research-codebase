@@ -7,7 +7,7 @@ from sklearn.model_selection import train_test_split
 
 from src.config import (
     DEVICE, KEYPOINT_NUM_EPOCHS, AUTOENCODER_NUM_EPOCHS, LEARNING_RATE, EARLY_STOPPING_PATIENCE,
-    MODEL_SAVE_PATH, PATCH_SIZE
+    MODEL_SAVE_PATH, PATCH_SIZE, DATASET_PATHS
 )
 from src.models.keypoint_model import KeypointCNN
 from src.models.autoencoder import Autoencoder
@@ -170,7 +170,7 @@ def main():
     os.makedirs(os.path.join(MODEL_SAVE_PATH, 'classification_checkpoints'), exist_ok=True)
     
     # Load and split keypoints data
-    df = load_keypoints_data('/home/sonanhbui/projects/mae-research/dataset/training.csv')
+    df = load_keypoints_data(DATASET_PATHS["keypoints"])
     train_df, temp_df = train_test_split(df, test_size=0.2, random_state=42)
     val_df, test_df = train_test_split(temp_df, test_size=0.5, random_state=42)
     

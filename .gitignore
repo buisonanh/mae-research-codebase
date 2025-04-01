@@ -11,4 +11,5 @@ wheels/
 
 # Folders to be ignored
 dataset/
+datasets/
 checkpoints*/

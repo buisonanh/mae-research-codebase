@@ -9,7 +9,7 @@
 echo "Starting MAE pretraining..."
 
 # Run pretraining
-python src/train.py
+python -m src.train
 
 # Check if pretraining was successful
 if [ $? -eq 0 ]; then
@@ -17,7 +17,7 @@ if [ $? -eq 0 ]; then
     echo "Starting classification training..."
     
     # Run classification training
-    python src/classify.py
+    python -m src.classify
     
     if [ $? -eq 0 ]; then
         echo "Classification training completed successfully!"

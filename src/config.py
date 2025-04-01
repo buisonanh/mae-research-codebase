@@ -1,7 +1,7 @@
 import torch
 
 # Device configuration
-DEVICE = torch.device('cuda:2' if torch.cuda.is_available() else 'cpu')
+DEVICE = torch.device('cuda:1' if torch.cuda.is_available() else 'cpu')
 
 # Dataset parameters
 TARGET_SIZE = 96
@@ -32,8 +32,9 @@ STD = [0.229, 0.224, 0.225]
 
 # Dataset paths
 DATASET_PATHS = {
-    "rafdb": "/home/sonanhbui/projects/mae-research/dataset/raf-db-dataset/DATASET/train",
-    "affectnet": "/home/sonanhbui/projects/mae-research/dataset/AffectNet/train"
+    "rafdb": "/home/sonanhbui/projects/mae-research-codebase/datasets/raf-db-dataset/DATASET/train",
+    "affectnet": "/home/sonanhbui/projects/mae-research-codebase/datasets/affectnet/AffectNet/train",
+    "keypoints": "/home/sonanhbui/projects/mae-research-codebase/datasets/keypoints/training_data/training.csv"
 }
 
 # Model save paths
