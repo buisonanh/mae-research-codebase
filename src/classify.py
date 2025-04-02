@@ -15,19 +15,23 @@ from torch.utils.data import random_split
 from src.config import (
     DEVICE, TARGET_SIZE, BATCH_SIZE, NUM_WORKERS, CLASSIFY_DATASET_NAME,
     MEAN, STD, DATASET_PATHS, MODEL_SAVE_PATH, NUM_CLASSES,
-    CLASSIFIER_NUM_EPOCHS, CLASSIFIER_LEARNING_RATE
+    CLASSIFIER_NUM_EPOCHS, CLASSIFIER_LEARNING_RATE, PRETRAINED_CHECKPOINT_PATH
 )
 
-def create_model(weights_path, num_classes=None):
-    """Create and initialize the classification model."""
+def create_model(weights_path=None, num_classes=None):
+    """Create and initialize the classification model.
+    
+    Args:
+        weights_path: Optional path to a pretrained checkpoint. If None, uses the default path
+                     or PRETRAINED_CHECKPOINT_PATH from config if specified.
+        num_classes: Number of output classes. If None, uses the value from config.
+    """
     if num_classes is None:
         num_classes = NUM_CLASSES[CLASSIFY_DATASET_NAME]
-        
-    # Load pretrained weights
-    weights = torch.load(os.path.join(MODEL_SAVE_PATH, 'pretrain_checkpoints', 'mae_checkpoints', 'mae_autoencoder_final.pth'), map_location=DEVICE)
     
-    # Extract encoder weights
-    encoder_weights = {k.replace("encoder.", ""): v for k, v in weights.items() if k.startswith("encoder.")}
+    # Determine which weights to load
+    if weights_path is None:
+        weights_path = PRETRAINED_CHECKPOINT_PATH
     
     # Create model
     model = timm.create_model(
@@ -37,8 +41,33 @@ def create_model(weights_path, num_classes=None):
     model.fc = nn.Identity()
     model.global_pool = nn.Identity()
     
-    # Load encoder weights
-    model.load_state_dict(encoder_weights)
+    # Load pretrained weights if specified
+    if weights_path is not None:
+        print(f"Loading pretrained weights from: {weights_path}")
+        weights = torch.load(weights_path, map_location=DEVICE)
+        
+        # Check if these are encoder weights or full model weights
+        if any(k.startswith("encoder.") for k in weights.keys()):
+            # Extract encoder weights from autoencoder
+            encoder_weights = {k.replace("encoder.", ""): v for k, v in weights.items() if k.startswith("encoder.")}
+            model.load_state_dict(encoder_weights)
+        else:
+            # Try to load weights directly (might be from a previous classification model)
+            try:
+                model.load_state_dict(weights)
+            except RuntimeError:
+                print("Warning: Could not load weights directly. The model architecture might be different.")
+                # If direct loading fails, try to load only the matching layers
+                model_dict = model.state_dict()
+                pretrained_dict = {k: v for k, v in weights.items() if k in model_dict and model_dict[k].shape == v.shape}
+                model_dict.update(pretrained_dict)
+                model.load_state_dict(model_dict)
+    else:
+        # Use default pretrained weights
+        print("Loading default pretrained weights")
+        weights = torch.load(os.path.join(MODEL_SAVE_PATH, 'pretrain_checkpoints', 'mae_checkpoints', 'mae_autoencoder_final.pth'), map_location=DEVICE)
+        encoder_weights = {k.replace("encoder.", ""): v for k, v in weights.items() if k.startswith("encoder.")}
+        model.load_state_dict(encoder_weights)
     
     # Add classification head
     model.global_pool = nn.AdaptiveAvgPool2d(1)
@@ -301,13 +330,21 @@ def plot_metrics(train_losses, val_losses, train_accuracies, val_accuracies):
 
 def main():
     """Main function to run the classification training."""
+    import argparse
+    
+    # Parse command-line arguments
+    parser = argparse.ArgumentParser(description='Train a classifier with optional pretrained checkpoint')
+    parser.add_argument('--checkpoint', type=str, default=None, 
+                        help='Path to a pretrained checkpoint to use for initialization')
+    args = parser.parse_args()
+    
     # Create save directories
     classification_dir = os.path.join(MODEL_SAVE_PATH, 'classification_checkpoints')
     os.makedirs(classification_dir, exist_ok=True)
     os.makedirs(os.path.join(classification_dir, 'metrics_plots'), exist_ok=True)
     
-    # Load pretrained model
-    model = create_model(None)  # weights_path is handled inside create_model now
+    # Load model with pretrained weights if specified
+    model = create_model(weights_path=args.checkpoint)
     
     # Create data loaders
     train_loader, val_loader, test_loader = create_data_loaders()
@@ -335,4 +372,4 @@ def main():
     save_metrics(final_pretrain_loss, test_loss, test_accuracy)
 
 if __name__ == "__main__":
-    main() 
+    main()

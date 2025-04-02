@@ -39,3 +39,6 @@ DATASET_PATHS = {
 
 # Model save paths
 MODEL_SAVE_PATH = "checkpoints_affectnet_rafdb" 
+
+# Pretrained checkpoint path (set to None to train from scratch)
+PRETRAINED_CHECKPOINT_PATH = None

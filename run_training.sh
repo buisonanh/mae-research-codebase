@@ -6,28 +6,69 @@
 # Set CUDA device (modify as needed)
 # export CUDA_VISIBLE_DEVICES=2
 
-echo "Starting MAE pretraining..."
+# Parse command line arguments
+PRETRAIN=true
+CLASSIFY=true
+CHECKPOINT=""
 
-# Run pretraining
-python -m src.train
+# Parse command line arguments
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    --skip-pretrain)
+      PRETRAIN=false
+      shift
+      ;;
+    --skip-classify)
+      CLASSIFY=false
+      shift
+      ;;
+    --checkpoint)
+      CHECKPOINT="$2"
+      shift 2
+      ;;
+    *)
+      echo "Unknown option: $1"
+      echo "Usage: $0 [--skip-pretrain] [--skip-classify] [--checkpoint PATH]"
+      exit 1
+      ;;
+  esac
+done
 
-# Check if pretraining was successful
-if [ $? -eq 0 ]; then
+# Run pretraining if not skipped
+if $PRETRAIN; then
+    echo "Starting MAE pretraining..."
+    python -m src.train
+    
+    # Check if pretraining was successful
+    if [ $? -ne 0 ]; then
+        echo "Error: Pretraining failed!"
+        exit 1
+    fi
     echo "Pretraining completed successfully!"
+else
+    echo "Skipping pretraining phase..."
+fi
+
+# Run classification if not skipped
+if $CLASSIFY; then
     echo "Starting classification training..."
     
-    # Run classification training
-    python -m src.classify
-    
-    if [ $? -eq 0 ]; then
-        echo "Classification training completed successfully!"
+    # Run classification training with or without checkpoint
+    if [ -n "$CHECKPOINT" ]; then
+        echo "Using pretrained checkpoint: $CHECKPOINT"
+        python -m src.classify --checkpoint "$CHECKPOINT"
     else
+        echo "Using default pretrained weights"
+        python -m src.classify
+    fi
+    
+    if [ $? -ne 0 ]; then
         echo "Error: Classification training failed!"
         exit 1
     fi
+    echo "Classification training completed successfully!"
 else
-    echo "Error: Pretraining failed!"
-    exit 1
+    echo "Skipping classification phase..."
 fi
 
-echo "All training completed successfully!" 
+echo "All requested training steps completed successfully!"
