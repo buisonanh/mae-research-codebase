@@ -37,7 +37,7 @@ done
 # Run pretraining if not skipped
 if $PRETRAIN; then
     echo "Starting MAE pretraining..."
-    python -m src.train
+    python -m src.pretrain
     
     # Check if pretraining was successful
     if [ $? -ne 0 ]; then

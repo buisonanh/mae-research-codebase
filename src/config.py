@@ -5,7 +5,7 @@ DEVICE = torch.device('cuda:1' if torch.cuda.is_available() else 'cpu')
 
 # Dataset parameters
 TARGET_SIZE = 96
-BATCH_SIZE = 512
+BATCH_SIZE = 128
 NUM_WORKERS = 4
 PRETRAIN_DATASET_NAME = "affectnet"  # Dataset for pretraining
 CLASSIFY_DATASET_NAME = "rafdb"  # Dataset for classification
@@ -21,7 +21,7 @@ NUM_KEYPOINTS = 15
 # Training parameters
 KEYPOINT_NUM_EPOCHS = 20
 AUTOENCODER_NUM_EPOCHS = 50
-CLASSIFIER_NUM_EPOCHS = 120
+CLASSIFIER_NUM_EPOCHS = 10
 CLASSIFIER_LEARNING_RATE = 0.01
 LEARNING_RATE = 0.001
 EARLY_STOPPING_PATIENCE = 5
