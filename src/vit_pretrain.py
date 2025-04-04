@@ -1,20 +1,24 @@
+import os
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from tqdm import tqdm
-import os
 import numpy as np
-import torchvision.transforms as transforms
+import matplotlib.pyplot as plt
 from torch.utils.data import DataLoader, random_split
+from torchvision import datasets, transforms
+import time
+import datetime
+import json
+from tqdm import tqdm
 import torchvision.datasets as datasets
 import matplotlib.pyplot as plt
 
 from src.config import (
-    DEVICE, AUTOENCODER_NUM_EPOCHS, LEARNING_RATE, EARLY_STOPPING_PATIENCE,
+    DEVICE, LEARNING_RATE, AUTOENCODER_NUM_EPOCHS, EARLY_STOPPING_PATIENCE,
     MODEL_SAVE_PATH, DATASET_PATHS, MEAN, STD, BATCH_SIZE, NUM_WORKERS,
-    PRETRAIN_DATASET_NAME
+    PRETRAIN_DATASET_NAME, MULTI_GPU, GPU_IDS
 )
-from src.models.vit_autoencoder import VitAutoencoder
+from src.models.vit_autoencoder import MaskedAutoencoder
 from src.utils.visualization import plot_loss_curve, format_config_params
 
 def get_data_transforms():
@@ -65,61 +69,14 @@ def create_data_loaders():
     
     return train_loader, val_loader
 
-class MaskedAutoencoder(nn.Module):
-    """Masked Autoencoder model based on ViT."""
-    def __init__(self, mask_ratio=0.75):
-        super().__init__()
-        self.autoencoder = VitAutoencoder()
-        self.mask_ratio = mask_ratio
-        
-        # Create a learnable mask token
-        self.mask_token = nn.Parameter(torch.zeros(1, 1, 384))
-        # Initialize the mask token
-        nn.init.normal_(self.mask_token, std=0.02)
-        
-    def forward(self, x):
-        # Get batch size
-        batch_size = x.shape[0]
-        
-        # Forward pass through encoder to get token embeddings
-        token_embeddings = self.autoencoder.encoder(x)  # Shape: [B, num_tokens, embed_dim]
-        
-        # Get dimensions
-        B, N, D = token_embeddings.shape  # batch, tokens, dimension
-        
-        # Create random mask (excluding CLS token at position 0)
-        num_masked = int(self.mask_ratio * (N - 1))
-        noise = torch.rand(B, N - 1, device=x.device)  # noise in [0, 1], excluding CLS token
-        
-        # Sort noise for each sample
-        ids_shuffle = torch.argsort(noise, dim=1)  # ascend: small is keep, large is remove
-        ids_restore = torch.argsort(ids_shuffle, dim=1)  # restore the original order
-        
-        # Keep the first (1-mask_ratio) tokens, mask the remaining
-        ids_keep = ids_shuffle[:, :N-1-num_masked]
-        
-        # Create full token indices including CLS token
-        cls_indices = torch.zeros(B, 1, dtype=torch.long, device=x.device)
-        ids_keep_with_cls = torch.cat([cls_indices, ids_keep + 1], dim=1)  # +1 because we excluded CLS token
-        
-        # Create masked token embeddings
-        masked_embeddings = token_embeddings.clone()
-        
-        # Create mask (1 for masked, 0 for unmasked)
-        mask = torch.ones(B, N, device=x.device, dtype=torch.bool)
-        mask.scatter_(1, ids_keep_with_cls, False)
-        
-        # Replace masked tokens with mask token
-        mask_tokens = self.mask_token.repeat(B, N, 1)
-        masked_embeddings = torch.where(mask.unsqueeze(-1), mask_tokens, token_embeddings)
-        
-        # Forward pass through decoder to reconstruct original embeddings
-        reconstructed_embeddings = self.autoencoder.decoder(masked_embeddings)
-        
-        return reconstructed_embeddings, token_embeddings, mask
 
 def train_vit_autoencoder(train_loader, val_loader, model, num_epochs):
     """Train the ViT autoencoder model."""
+    # Check if we should use multiple GPUs
+    if MULTI_GPU and torch.cuda.is_available() and len(GPU_IDS) > 1:
+        print(f"Using {len(GPU_IDS)} GPUs: {GPU_IDS}")
+        model = torch.nn.DataParallel(model, device_ids=GPU_IDS)
+    
     model.to(DEVICE)
     # Use MSE loss for token embedding reconstruction
     criterion = nn.MSELoss()
@@ -267,7 +224,7 @@ def main():
     
     # Create masked autoencoder model
     print("Creating Masked Autoencoder model...")
-    masked_autoencoder = MaskedAutoencoder(mask_ratio=0.75)
+    masked_autoencoder = MaskedAutoencoder()
     
     # Train ViT autoencoder
     print("Training ViT Masked Autoencoder...")

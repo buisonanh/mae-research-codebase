@@ -1,7 +1,7 @@
 import torch
 
 # Device configuration
-DEVICE = torch.device('cuda:1' if torch.cuda.is_available() else 'cpu')
+DEVICE = torch.device('cuda:3' if torch.cuda.is_available() else 'cpu')
 
 # Dataset parameters
 TARGET_SIZE = 96

@@ -1,4 +1,3 @@
-from .keypoint_model import KeypointCNN
-from .autoencoder import Autoencoder, Encoder, Decoder
+from .vit_autoencoder import MaskedAutoencoder
 
-__all__ = ['KeypointCNN', 'Autoencoder', 'Encoder', 'Decoder'] 
+__all__ = ['MaskedAutoencoder']

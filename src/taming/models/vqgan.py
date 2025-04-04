@@ -1,8 +1,8 @@
 import torch
 import pytorch_lightning as pl
 
-from taming.modules.diffusionmodules.model import Encoder, Decoder
-from taming.modules.vqvae.quantize import VectorQuantizer2 as VectorQuantizer
+from src.taming.modules.diffusionmodules.model import Encoder, Decoder
+from src.taming.modules.vqvae.quantize import VectorQuantizer2 as VectorQuantizer
 
 
 class VQModel(pl.LightningModule):
