@@ -2,7 +2,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from functools import partial
-from src.utils.masking import partial_jigsaw_mask_keypoints
+from src.utils.masking import partial_jigsaw_mask_keypoints, random_mask
+import os
 
 def display_image_with_keypoints(image_path, keypoints):
     """Display an image with its keypoints overlaid."""
@@ -22,82 +23,33 @@ def display_image_with_keypoints(image_path, keypoints):
         plt.scatter(x, y, s=10, c='red', marker='o')
     plt.show()
 
-def plot_training_results(original_images, masked_images, reconstructed_images, 
-                         keypoints=None, image_names=None, labels=None, num_images=7,
-                         save_path=None):
-    """Plot original, masked, and reconstructed images in a grid.
+
+def plot_loss_curve(train_loss_values, val_loss_values, save_path=None):
+    """Plot training and validation loss curves."""
+    epochs = range(1, len(train_loss_values) + 1)
     
-    Args:
-        original_images: Tensor of original images
-        masked_images: Tensor of masked images
-        reconstructed_images: Tensor of reconstructed images
-        keypoints: Optional tensor of keypoints to plot
-        image_names: Optional list of image names
-        labels: Optional tensor of labels
-        num_images: Number of images to show (default: 7)
-        save_path: Optional path to save the plot
-    """
-    num_show = min(num_images, original_images.shape[0])
-    fig, ax = plt.subplots(3, num_show, figsize=(15, 6))
-
-    for i in range(num_show):
-        img_name = image_names[i] if image_names is not None else f"Image {i}"
-        img_class = labels[i].item() if labels is not None else "Unknown"
-
-        # Original images
-        orig_img = original_images[i].detach().cpu().numpy().transpose(1, 2, 0)
-        ax[0, i].imshow(orig_img, cmap='gray')
-        ax[0, i].set_title(f"Original\n{img_name}\nClass: {img_class}", fontsize=8)
-        ax[0, i].axis('off')
-
-        # Plot keypoints if provided
-        if keypoints is not None:
-            kps = keypoints[i].detach().cpu().numpy()
-            H_, W_ = original_images[i].shape[1:3]
-            kps[:, 0] *= W_
-            kps[:, 1] *= H_
-            ax[0, i].scatter(kps[:, 0], kps[:, 1], s=10, c='red', marker='o')
-
-        # Masked images
-        masked_img = masked_images[i].detach().cpu().numpy().transpose(1, 2, 0)
-        ax[1, i].imshow(masked_img, cmap='gray')
-        ax[1, i].set_title(f"Masked\n{img_name}", fontsize=8)
-        ax[1, i].axis('off')
-
-        # Reconstructed images
-        recon_img = reconstructed_images[i].detach().cpu().numpy().transpose(1, 2, 0)
-        ax[2, i].imshow(recon_img)
-        ax[2, i].set_title(f"Reconstructed\n{img_name}", fontsize=8)
-        ax[2, i].axis('off')
-
-    plt.tight_layout()
-    
-    if save_path:
-        plt.savefig(save_path, dpi=300)
-        plt.close()
-    
-    return fig
-
-def plot_loss_curve(loss_values, save_path=None):
-    """Plot training loss curve."""
     plt.figure(figsize=(10, 6))
-    plt.plot(range(1, len(loss_values) + 1), loss_values, label='Training Loss')
+    plt.plot(epochs, train_loss_values, label='Training Loss', color='blue')
+    plt.plot(epochs, val_loss_values, label='Validation Loss', color='orange')
+    
     plt.xlabel('Epoch')
     plt.ylabel('Loss')
-    plt.title('Training Loss Over Epochs')
+    plt.title('Training and Validation Loss Over Epochs')
     plt.legend()
     plt.grid(True)
     
     if save_path:
+        # Ensure the directory exists
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
         plt.savefig(save_path, dpi=300)
     plt.show()
 
 def save_reconstruction_samples(model, model_keypoints, test_loader, device, save_path, patch_size, num_samples=7):
-    """Save visualization of original-masked-reconstructed samples from test set.
+    """Save visualization of reconstruction samples.
     
     Args:
         model: The trained autoencoder model
-        model_keypoints: The trained keypoint detection model
+        model_keypoints: The trained keypoint detection model (can be None if not using keypoints)
         test_loader: DataLoader for test set
         device: Device to run inference on
         save_path: Path to save the visualization
@@ -106,7 +58,8 @@ def save_reconstruction_samples(model, model_keypoints, test_loader, device, sav
     """
     # Put models in eval mode
     model.eval()
-    model_keypoints.eval()
+    if model_keypoints is not None:
+        model_keypoints.eval()
 
     # Get one batch from test set
     data_iter = iter(test_loader)
@@ -118,24 +71,33 @@ def save_reconstruction_samples(model, model_keypoints, test_loader, device, sav
     data = data.to(device)
 
     with torch.no_grad():
-        # 1) Generate keypoints
-        data_gray = data.mean(dim=1, keepdim=True)
-        keypoints_flat = model_keypoints(data_gray)
-        num_keypoints = 15
-        predicted_keypoints = keypoints_flat.view(-1, num_keypoints, 2)
+        if model_keypoints is not None:
+            # 1) Generate keypoints
+            data_gray = data.mean(dim=1, keepdim=True)
+            keypoints_flat = model_keypoints(data_gray)
+            num_keypoints = 15
+            predicted_keypoints = keypoints_flat.view(-1, num_keypoints, 2)
 
-        # 2) Apply masking
-        masked_img = partial_jigsaw_mask_keypoints(
-            data.clone(),
-            keypoints=predicted_keypoints,
-            patch_size=patch_size
-        )
-        
-        # 3) Convert to 3 channels for model input
-        masked_img_3c = masked_img.repeat(1, 3, 1, 1)
+            # 2) Apply masking
+            masked_img = partial_jigsaw_mask_keypoints(
+                data.clone(),
+                keypoints=predicted_keypoints,
+                patch_size=patch_size
+            )
+        else:
+            # Apply random masking
+            masked_img = random_mask(
+                data.clone(),
+                patch_size=patch_size,
+                mask_ratio=0.4
+            )
+            
+        # Convert to 3 channels for model input if needed
+        if masked_img.shape[1] == 1:
+            masked_img = masked_img.repeat(1, 3, 1, 1)
 
         # 4) Generate reconstruction
-        output = model(masked_img_3c)
+        output = model(masked_img)
 
     # Move tensors to CPU for plotting
     data_cpu = data.cpu().numpy()
@@ -155,12 +117,13 @@ def save_reconstruction_samples(model, model_keypoints, test_loader, device, sav
         ax[0, i].set_title(f"Original\n{img_name}", fontsize=8)
         ax[0, i].axis('off')
 
-        # Plot keypoints
-        kps = predicted_keypoints[i].cpu().numpy()
-        H_, W_ = data[i].shape[1], data[i].shape[2]
-        kps[:, 0] *= W_
-        kps[:, 1] *= H_
-        ax[0, i].scatter(kps[:, 0], kps[:, 1], s=10, c='red', marker='o')
+        if model_keypoints is not None:
+            # Plot keypoints
+            kps = predicted_keypoints[i].cpu().numpy()
+            H_, W_ = data[i].shape[1], data[i].shape[2]
+            kps[:, 0] *= W_
+            kps[:, 1] *= H_
+            ax[0, i].scatter(kps[:, 0], kps[:, 1], s=10, c='red', marker='o')
 
         # Masked image
         masked_2d = masked_cpu[i, 0, :, :]
@@ -187,7 +150,7 @@ def format_config_params():
         AUTOENCODER_NUM_EPOCHS, CLASSIFIER_NUM_EPOCHS,
         CLASSIFIER_LEARNING_RATE, LEARNING_RATE,
         EARLY_STOPPING_PATIENCE, MEAN, STD, DATASET_PATHS,
-        MODEL_SAVE_PATH
+        SAVE_PATH
     )
     
     config_str = "=== Configuration Parameters ===\n\n"
@@ -232,6 +195,33 @@ def format_config_params():
     
     # Save paths
     config_str += "Save Paths:\n"
-    config_str += f"Model Save Path: {MODEL_SAVE_PATH}\n"
+    config_str += f"Model Save Path: {SAVE_PATH}\n"
     
-    return config_str 
+    return config_str
+
+
+def save_training_results(train_loss_values, val_loss_values, config, save_path):
+    """Save training results and configurations to a text file."""
+    with open(save_path, 'w') as f:
+        # Write configuration
+        f.write("Training Configuration:\n")
+        f.write("----------------------\n")
+        f.write(config)
+        
+        # Write final metrics
+        f.write("\nFinal Metrics:\n")
+        f.write("--------------\n")
+        f.write(f"Final Train Loss: {train_loss_values[-1]:.6f}\n")
+        f.write(f"Final Validation Loss: {val_loss_values[-1]:.6f}\n")
+        f.write(f"Best Validation Loss: {min(val_loss_values):.6f}\n")
+        
+        # Write loss history
+        f.write("\nTraining Loss History:\n")
+        f.write("---------------------\n")
+        for epoch, loss in enumerate(train_loss_values):
+            f.write(f"Epoch {epoch+1}: {loss:.6f}\n")
+        
+        f.write("\nValidation Loss History:\n")
+        f.write("-----------------------\n")
+        for epoch, loss in enumerate(val_loss_values):
+            f.write(f"Epoch {epoch+1}: {loss:.6f}\n")

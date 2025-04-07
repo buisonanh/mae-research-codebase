@@ -70,7 +70,7 @@ def load_keypoints_data(csv_path):
     
     return df
 
-def create_data_loaders(train_df, val_df, test_df):
+def create_keypoints_data_loaders(train_df, val_df, test_df):
     transform = get_transform()
     
     # Create datasets
@@ -85,15 +85,38 @@ def create_data_loaders(train_df, val_df, test_df):
     
     return train_loader, val_loader, test_loader
 
-def get_image_dataset():
+# def get_image_dataset():
+#     transform = get_transform()
+#     dataset = datasets.ImageFolder(
+#         root=DATASET_PATHS[PRETRAIN_DATASET_NAME],
+#         transform=transform
+#     )
+#     return DataLoader(
+#         dataset,
+#         batch_size=BATCH_SIZE,
+#         shuffle=True,
+#         num_workers=NUM_WORKERS
+#     )
+
+def create_pretrain_data_loaders():
     transform = get_transform()
-    dataset = datasets.ImageFolder(
+    
+    train_dataset = datasets.ImageFolder(
         root=DATASET_PATHS[PRETRAIN_DATASET_NAME],
         transform=transform
     )
-    return DataLoader(
-        dataset,
-        batch_size=BATCH_SIZE,
-        shuffle=True,
-        num_workers=NUM_WORKERS
-    ) 
+    val_dataset = datasets.ImageFolder(
+        root=DATASET_PATHS[PRETRAIN_DATASET_NAME].replace('train', 'val'),
+        transform=transform
+    )
+    test_dataset = datasets.ImageFolder(
+        root=DATASET_PATHS[PRETRAIN_DATASET_NAME].replace('train', 'test'),
+        transform=transform
+    )
+    
+    # Create data loaders
+    train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=NUM_WORKERS)
+    val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS)
+    test_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS)
+    
+    return train_loader, val_loader, test_loader

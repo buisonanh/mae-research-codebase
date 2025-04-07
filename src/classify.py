@@ -11,11 +11,12 @@ import seaborn as sns
 from sklearn.metrics import confusion_matrix
 import os
 from torch.utils.data import random_split
+import json
 
 from src.config import (
     DEVICE, TARGET_SIZE, BATCH_SIZE, NUM_WORKERS, CLASSIFY_DATASET_NAME,
-    MEAN, STD, DATASET_PATHS, MODEL_SAVE_PATH, NUM_CLASSES,
-    CLASSIFIER_NUM_EPOCHS, CLASSIFIER_LEARNING_RATE, PRETRAINED_CHECKPOINT_PATH
+    MEAN, STD, DATASET_PATHS, NUM_CLASSES,
+    CLASSIFIER_NUM_EPOCHS, CLASSIFIER_LEARNING_RATE, PRETRAIN_FOLDER, CLASSIFICATION_FOLDER
 )
 
 def create_model(weights_path=None, num_classes=None):
@@ -31,7 +32,7 @@ def create_model(weights_path=None, num_classes=None):
     
     # Determine which weights to load
     if weights_path is None:
-        weights_path = PRETRAINED_CHECKPOINT_PATH
+        weights_path = os.path.join(PRETRAIN_FOLDER, 'mae_checkpoints', 'best_model.pth')
     
     # Create model
     model = timm.create_model(
@@ -65,7 +66,7 @@ def create_model(weights_path=None, num_classes=None):
     else:
         # Use default pretrained weights
         print("Loading default pretrained weights")
-        weights = torch.load(os.path.join(MODEL_SAVE_PATH, 'pretrain_checkpoints', 'mae_checkpoints', 'mae_autoencoder_final.pth'), map_location=DEVICE)
+        weights = torch.load(os.path.join(PRETRAIN_FOLDER, 'mae_checkpoints', 'best_model.pth'), map_location=DEVICE)
         encoder_weights = {k.replace("encoder.", ""): v for k, v in weights.items() if k.startswith("encoder.")}
         model.load_state_dict(encoder_weights)
     
@@ -147,7 +148,7 @@ def train_model(model, train_loader, val_loader, num_epochs=CLASSIFIER_NUM_EPOCH
     best_val_loss = float('inf')
     
     # Create classification checkpoint directory
-    classification_dir = os.path.join(MODEL_SAVE_PATH, 'classification_checkpoints')
+    classification_dir = CLASSIFICATION_FOLDER
     os.makedirs(classification_dir, exist_ok=True)
     
     for epoch in range(num_epochs):
@@ -200,20 +201,41 @@ def train_model(model, train_loader, val_loader, num_epochs=CLASSIFIER_NUM_EPOCH
         val_losses.append(epoch_val_loss)
         val_accuracies.append(epoch_val_acc)
         
-        # Update scheduler
-        scheduler.step(epoch_val_loss)
+        # Print metrics
+        print(f"Epoch [{epoch+1}/{num_epochs}], ")
+        print(f"Train Loss: {epoch_train_loss:.4f}, Train Acc: {epoch_train_acc:.2f}%, ")
+        print(f"Val Loss: {epoch_val_loss:.4f}, Val Acc: {epoch_val_acc:.2f}%")
         
-        # Save best model
+        # Save model if validation loss improved
         if epoch_val_loss < best_val_loss:
-            torch.save(
-                model.state_dict(),
-                os.path.join(classification_dir, f'classifier_{CLASSIFY_DATASET_NAME}_epoch{epoch}.pth')
-            )
             best_val_loss = epoch_val_loss
+            torch.save(model.state_dict(), os.path.join(classification_dir, 'best_model.pth'))
+            print("Best model saved!")
         
-        print(f"Epoch [{epoch + 1}/{num_epochs}]")
-        print(f"  Training Loss: {epoch_train_loss:.4f}, Training Accuracy: {epoch_train_acc:.2f}%")
-        print(f"  Validation Loss: {epoch_val_loss:.4f}, Validation Accuracy: {epoch_val_acc:.2f}%")
+        # Save metrics to JSON file
+        metrics_dict = {
+            'epoch': epoch + 1,
+            'train_loss': epoch_train_loss,
+            'train_acc': epoch_train_acc,
+            'val_loss': epoch_val_loss,
+            'val_acc': epoch_val_acc
+        }
+        
+        # Save to JSON file
+        results_file = os.path.join(classification_dir, 'training_metrics.json')
+        if os.path.exists(results_file):
+            with open(results_file, 'r') as f:
+                data = json.load(f)
+        else:
+            data = []
+        
+        data.append(metrics_dict)
+        
+        with open(results_file, 'w') as f:
+            json.dump(data, f, indent=4)
+        
+        # Step the scheduler
+        scheduler.step(epoch_val_loss)
     
     return train_losses, train_accuracies, val_losses, val_accuracies
 
@@ -263,7 +285,7 @@ def evaluate_model(model, test_loader):
     plt.xlabel("Predicted Labels")
     plt.ylabel("True Labels")
     plt.tight_layout()
-    plt.savefig(os.path.join(MODEL_SAVE_PATH, 'classification_checkpoints', "confusion_matrix.png"))
+    plt.savefig(os.path.join(CLASSIFICATION_FOLDER, "confusion_matrix.png"))
     plt.close()
     
     return test_loss, test_accuracy
@@ -271,7 +293,7 @@ def evaluate_model(model, test_loader):
 def save_metrics(final_pretrain_loss, test_loss, test_accuracy):
     """Save all training metrics to a text file."""
     from src.utils.visualization import format_config_params
-    metrics_file = os.path.join(MODEL_SAVE_PATH, 'classification_checkpoints', 'final_metrics.txt')
+    metrics_file = os.path.join(CLASSIFICATION_FOLDER, 'final_metrics.txt')
     
     with open(metrics_file, 'w') as f:
         # Write configuration parameters
@@ -285,47 +307,29 @@ def save_metrics(final_pretrain_loss, test_loss, test_accuracy):
 
 def plot_metrics(train_losses, val_losses, train_accuracies, val_accuracies):
     """Plot and save training metrics."""
-    metrics_dir = os.path.join(MODEL_SAVE_PATH, "classification_checkpoints", "metrics_plots")
+    metrics_dir = os.path.join(CLASSIFICATION_FOLDER, "metrics_plots")
     os.makedirs(metrics_dir, exist_ok=True)
     
-    # Plot training metrics
+    # Plot training and validation metrics
     plt.figure(figsize=(12, 5))
     plt.subplot(1, 2, 1)
     plt.plot(train_losses, label='Training Loss')
-    plt.title('Training Loss')
+    plt.plot(val_losses, label='Validation Loss', color='orange')
+    plt.title('Training and Validation Loss')
     plt.xlabel('Epoch')
     plt.ylabel('Loss')
     plt.legend()
     
     plt.subplot(1, 2, 2)
     plt.plot(train_accuracies, label='Training Accuracy')
-    plt.title('Training Accuracy')
-    plt.xlabel('Epoch')
-    plt.ylabel('Accuracy (%)')
-    plt.legend()
-    
-    plt.tight_layout()
-    plt.savefig(os.path.join(metrics_dir, "training.png"))
-    plt.close()
-    
-    # Plot validation metrics
-    plt.figure(figsize=(12, 5))
-    plt.subplot(1, 2, 1)
-    plt.plot(val_losses, label='Validation Loss', color='orange')
-    plt.title('Validation Loss')
-    plt.xlabel('Epoch')
-    plt.ylabel('Loss')
-    plt.legend()
-    
-    plt.subplot(1, 2, 2)
     plt.plot(val_accuracies, label='Validation Accuracy', color='orange')
-    plt.title('Validation Accuracy')
+    plt.title('Training and Validation Accuracy')
     plt.xlabel('Epoch')
     plt.ylabel('Accuracy (%)')
     plt.legend()
     
     plt.tight_layout()
-    plt.savefig(os.path.join(metrics_dir, "validation.png"))
+    plt.savefig(os.path.join(metrics_dir, "training_validation.png"))
     plt.close()
 
 def main():
@@ -339,7 +343,7 @@ def main():
     args = parser.parse_args()
     
     # Create save directories
-    classification_dir = os.path.join(MODEL_SAVE_PATH, 'classification_checkpoints')
+    classification_dir = CLASSIFICATION_FOLDER
     os.makedirs(classification_dir, exist_ok=True)
     os.makedirs(os.path.join(classification_dir, 'metrics_plots'), exist_ok=True)
     
@@ -363,7 +367,7 @@ def main():
     
     # Try to read final pretraining loss
     try:
-        with open(os.path.join(MODEL_SAVE_PATH, 'pretrain_checkpoints', 'final_pretrain_loss.txt'), 'r') as f:
+        with open(os.path.join(PRETRAIN_FOLDER, 'final_pretrain_loss.txt'), 'r') as f:
             final_pretrain_loss = float(f.read().strip())
     except (FileNotFoundError, ValueError):
         final_pretrain_loss = float('nan')
