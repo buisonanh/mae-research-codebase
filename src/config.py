@@ -3,11 +3,11 @@ import os
 import json
 
 # Device configuration
-DEVICE = torch.device('cuda:3' if torch.cuda.is_available() else 'cpu')
+DEVICE = torch.device('cuda:1')
 
 # Dataset parameters
 TARGET_SIZE = 96
-BATCH_SIZE = 512
+BATCH_SIZE = 32
 NUM_WORKERS = 4
 PRETRAIN_DATASET_NAME = "affectnet"  # Dataset for pretraining
 CLASSIFY_DATASET_NAME = "rafdb"  # Dataset for classification
@@ -16,8 +16,10 @@ NUM_CLASSES = {
     "affectnet": 8  # For AffectNet dataset
 }
 
+ENCODER_MODEL = "convnextv2_base" # [resnet18, convnextv2_base]
+
 # Maskng strategy
-MASKING_STRATEGY = "random" # "keypoints-jigsaw", "random-jigsaw", "random"
+MASKING_STRATEGY = "random-jigsaw" # "keypoints-jigsaw", "random-jigsaw", "random"
 
 # Model parameters
 PATCH_SIZE = 16
@@ -26,7 +28,7 @@ PATCH_SIZE = 16
 NUM_KEYPOINTS = 15
 
 # For random jigsaw masking and jigsaw masking only
-MASK_RATIO = 0.4
+MASK_RATIO = 0.75
 
 # Training parameters
 AUTOENCODER_NUM_EPOCHS = 50
@@ -34,12 +36,15 @@ CLASSIFIER_NUM_EPOCHS = 120
 KEYPOINT_NUM_EPOCHS = 20
 
 LEARNING_RATE = 0.001
-CLASSIFIER_LEARNING_RATE = 0.01
+CLASSIFIER_LEARNING_RATE = 0.001
 EARLY_STOPPING_PATIENCE = 5
 
 # Image normalization parameters
-MEAN = [0.485, 0.456, 0.406]
-STD = [0.229, 0.224, 0.225]
+# MEAN = [0.485, 0.456, 0.406]
+# STD = [0.229, 0.224, 0.225]
+
+MEAN = [0.5, 0.5, 0.5]
+STD = [0.5, 0.5, 0.5]
 
 # Dataset paths
 DATASET_PATHS = {
@@ -50,7 +55,7 @@ DATASET_PATHS = {
 
 # Model save paths
 
-SAVE_PATH = f"results_{PRETRAIN_DATASET_NAME}_{CLASSIFY_DATASET_NAME}_{MASKING_STRATEGY}"
+SAVE_PATH = f"results_{ENCODER_MODEL}_{PRETRAIN_DATASET_NAME}_{CLASSIFY_DATASET_NAME}_{MASKING_STRATEGY}_mr{MASK_RATIO}_lr{LEARNING_RATE}_mean{MEAN}_std{STD}"
 
 PRETRAIN_FOLDER = os.path.join(SAVE_PATH, f'pretrain_checkpoints')
 CLASSIFICATION_FOLDER = os.path.join(SAVE_PATH, f'classification_checkpoints')

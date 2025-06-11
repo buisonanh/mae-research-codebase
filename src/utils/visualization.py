@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from functools import partial
-from src.utils.masking import partial_jigsaw_mask_keypoints, random_mask
+from src.utils.masking import partial_jigsaw_mask_keypoints, random_mask, partial_jigsaw_mask
 import os
 
 def display_image_with_keypoints(image_path, keypoints):
@@ -44,7 +44,7 @@ def plot_loss_curve(train_loss_values, val_loss_values, save_path=None):
         plt.savefig(save_path, dpi=300)
     plt.show()
 
-def save_reconstruction_samples(model, model_keypoints, test_loader, device, save_path, patch_size, num_samples=7):
+def save_reconstruction_samples(model, model_keypoints, test_loader, device, save_path, patch_size, num_samples=7, masking_strategy="random-jigsaw"):
     """Save visualization of reconstruction samples.
     
     Args:
@@ -84,12 +84,19 @@ def save_reconstruction_samples(model, model_keypoints, test_loader, device, sav
                 keypoints=predicted_keypoints,
                 patch_size=patch_size
             )
-        else:
+        elif masking_strategy == "random":
             # Apply random masking
             masked_img = random_mask(
                 data.clone(),
                 patch_size=patch_size,
                 mask_ratio=0.4
+            )
+        elif masking_strategy == "random-jigsaw":
+            # Apply random jigsaw masking
+            masked_img = partial_jigsaw_mask(
+                data.clone(),
+                patch_size=patch_size,
+                shuffle_ratio=0.4
             )
             
         # Convert to 3 channels for model input if needed

@@ -186,6 +186,8 @@ def main():
     else:
         keypoint_model = None
 
+    print(f"Masking ratio: {MASK_RATIO}")
+
 
     # For random masking strategies, we don't need keypoints data
     print("Loading image dataset for autoencoder...")
@@ -193,7 +195,7 @@ def main():
 
     # Train autoencoder
     print("Training autoencoder...")
-    autoencoder = Autoencoder()
+    autoencoder = Autoencoder(model_name=ENCODER_MODEL)
     train_loss_values, val_loss_values = train_autoencoder(
         train_loader, 
         val_loader, 
@@ -228,7 +230,9 @@ def main():
         test_loader,
         DEVICE,
         os.path.join(PRETRAIN_FOLDER, 'reconstruction_samples.png'),
-        PATCH_SIZE
+        PATCH_SIZE,
+        num_samples=7,
+        masking_strategy=MASKING_STRATEGY
     )
 
 if __name__ == "__main__":
