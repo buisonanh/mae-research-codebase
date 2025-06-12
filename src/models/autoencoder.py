@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import timm
+from timm.models.convnext import ConvNeXtBlock
 
 class Encoder(nn.Module):
     def __init__(self, model_name="resnet18"):
@@ -20,23 +21,43 @@ class Encoder(nn.Module):
 class ConvNeXtv2TinyDecoder(nn.Module):
     def __init__(self):
         super(ConvNeXtv2TinyDecoder, self).__init__()
-        self.decoder = nn.Sequential(
-            nn.ConvTranspose2d(1024, 512, kernel_size=3, stride=2, padding=1, output_padding=1),
+        
+        encoder_output_channels = 768 
+        decoder_output_channels = 3
+
+        # A single ConvNeXt block from timm.models.convnext
+        # It processes features at the same spatial resolution and can transform channel depth if configured.
+        # Here, in_chs=encoder_output_channels means it expects 768 channels and will output 768 channels by default.
+        self.convnext_block = ConvNeXtBlock(in_chs=encoder_output_channels) # Uses default parameters for the block
+
+        # Upsampling layers to reconstruct the image from the features processed by ConvNeXtBlock
+        self.upsampler = nn.Sequential(
+            # Input to upsampler is [B, 768, H_feat, W_feat] (e.g., [B, 768, 3, 3])
+            # Upsample 3x3 -> 6x6, 768ch -> 512ch
+            nn.ConvTranspose2d(encoder_output_channels, 512, kernel_size=3, stride=2, padding=1, output_padding=1),
             nn.ReLU(),
+            # Upsample 6x6 -> 12x12, 512ch -> 256ch
             nn.ConvTranspose2d(512, 256, kernel_size=3, stride=2, padding=1, output_padding=1),
             nn.ReLU(),
+            # Upsample 12x12 -> 24x24, 256ch -> 128ch
             nn.ConvTranspose2d(256, 128, kernel_size=3, stride=2, padding=1, output_padding=1),
             nn.ReLU(),
+            # Upsample 24x24 -> 48x48, 128ch -> 64ch
             nn.ConvTranspose2d(128, 64, kernel_size=3, stride=2, padding=1, output_padding=1),
             nn.ReLU(),
+            # Upsample 48x48 -> 96x96, 64ch -> 64ch
             nn.ConvTranspose2d(64, 64, kernel_size=3, stride=2, padding=1, output_padding=1),
             nn.ReLU(),
-            nn.ConvTranspose2d(64, 3, kernel_size=3, stride=1, padding=1),
-            nn.Sigmoid(),
+            # Final layer to get to 3 channels for the image, no spatial change from 96x96
+            nn.ConvTranspose2d(64, decoder_output_channels, kernel_size=3, stride=1, padding=1),
+            nn.Sigmoid(), # To ensure pixel values are in [0, 1]
         )
     
     def forward(self, x):
-        x = self.decoder(x)
+        # Pass input through the ConvNeXt block first
+        x = self.convnext_block(x)
+        # Then through the upsampler
+        x = self.upsampler(x)
         return x
 
 class Resnet18Decoder(nn.Module):
