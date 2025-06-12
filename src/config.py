@@ -16,7 +16,7 @@ NUM_CLASSES = {
     "affectnet": 8  # For AffectNet dataset
 }
 
-ENCODER_MODEL = "convnextv2_base" # [resnet18, convnextv2_base]
+ENCODER_MODEL = "convnextv2_tiny" # [resnet18, convnextv2_tiny]
 
 # Maskng strategy
 MASKING_STRATEGY = "random-jigsaw" # "keypoints-jigsaw", "random-jigsaw", "random"

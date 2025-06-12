@@ -17,9 +17,9 @@ class Encoder(nn.Module):
         x = self.encoder.forward_features(x)
         return x
 
-class ConvNeXtv2BaseDecoder(nn.Module):
+class ConvNeXtv2TinyDecoder(nn.Module):
     def __init__(self):
-        super(ConvNeXtv2BaseDecoder, self).__init__()
+        super(ConvNeXtv2TinyDecoder, self).__init__()
         self.decoder = nn.Sequential(
             nn.ConvTranspose2d(1024, 512, kernel_size=3, stride=2, padding=1, output_padding=1),
             nn.ReLU(),
@@ -67,8 +67,8 @@ class Autoencoder(nn.Module):
         self.encoder = Encoder(model_name=model_name)
         if model_name == "resnet18":
             self.decoder = Resnet18Decoder()
-        elif model_name == "convnextv2_base":
-            self.decoder = ConvNeXtv2BaseDecoder()
+        elif model_name == "convnextv2_tiny":
+            self.decoder = ConvNeXtv2TinyDecoder()
 
     def forward(self, x):
         """The forward function takes in an image and returns the reconstructed image."""
