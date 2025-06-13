@@ -47,8 +47,9 @@ def create_model(weights_path=None, num_classes=None):
         print(f"Creating base model {ENCODER_MODEL} for feature extraction (loading from path: {weights_path})")
         feature_extractor = timm.create_model(
             model_name=ENCODER_MODEL,
-            pretrained=False, # We are loading weights from a file
-            num_classes=0     # Creates a feature extractor (removes classifier head and global pool)
+            pretrained=False,  # We are loading weights from a file
+            num_classes=0,     # We want the feature extractor
+            global_pool=''     # Return a 4D feature map
         )
 
         print(f"Loading pretrained weights from checkpoint: {weights_path}")
@@ -126,14 +127,35 @@ def create_data_loaders():
     """Create data loaders for training, validation and testing."""
     data_transforms = get_data_transforms()
     
+    # Correctly point to the 'train' and 'test' subdirectories for ImageFolder
+    base_path = DATASET_PATHS[CLASSIFY_DATASET_NAME]
+    train_path = os.path.join(base_path, 'train')
+    test_path = os.path.join(base_path, 'test')
+
+    # Check if these paths exist to avoid errors with different dataset structures.
+    if not os.path.isdir(train_path):
+        print(f"Warning: 'train' subdirectory not found in {base_path}. Using root directory for training.")
+        train_path = base_path
+    
+    if not os.path.isdir(test_path):
+        print(f"Warning: 'test' subdirectory not found in {base_path}. Using root directory for testing.")
+        test_path = base_path
+
     train_dataset = datasets.ImageFolder(
-        root=os.path.join(DATASET_PATHS[CLASSIFY_DATASET_NAME]),
+        root=train_path,
         transform=data_transforms['train']
     )
     testset = datasets.ImageFolder(
-        root=os.path.join(DATASET_PATHS[CLASSIFY_DATASET_NAME].replace('train', 'test')),
+        root=test_path,
         transform=data_transforms['test']
     )
+
+    # Sanity check: ensure the number of classes matches the configuration
+    num_found_classes = len(train_dataset.classes)
+    num_expected_classes = NUM_CLASSES[CLASSIFY_DATASET_NAME]
+    if num_found_classes != num_expected_classes:
+        print(f"Warning: Found {num_found_classes} classes, but expected {num_expected_classes}.")
+        print(f"Found classes: {train_dataset.classes}")
     
     # Split training into train and validation
     train_size = int(0.8 * len(train_dataset))
