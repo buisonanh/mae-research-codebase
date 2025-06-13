@@ -39,27 +39,36 @@ class ConvNeXtv2TinyDecoder(nn.Module):
         self.decoder_blocks = nn.Sequential(*decoder_blocks_list)
         
         # Upsampling layers to reconstruct the image
-        # The input to the upsampler now comes from self.decoder_blocks, 
-        # so it has decoder_embed_dim channels.
+        # Using nn.Upsample + nn.Conv2d for more stable training vs. ConvTranspose2d
         self.upsampler = nn.Sequential(
-            # Input: [B, decoder_embed_dim, H_feat, W_feat]
-            # Upsample H_feat x W_feat -> 2*H_feat x 2*W_feat, decoder_embed_dim -> 512ch
-            nn.ConvTranspose2d(decoder_embed_dim, 512, kernel_size=3, stride=2, padding=1, output_padding=1), # MODIFIED: in_channels
+            # Input: [B, decoder_embed_dim, H_feat, W_feat] (e.g., [B, 512, 3, 3])
+            # Upsample 3x3 -> 6x6
+            nn.Upsample(scale_factor=2, mode='nearest'),
+            nn.Conv2d(decoder_embed_dim, 512, kernel_size=3, padding=1),
             nn.ReLU(),
-            # Upsample -> 4*H_feat x 4*W_feat, 512ch -> 256ch
-            nn.ConvTranspose2d(512, 256, kernel_size=3, stride=2, padding=1, output_padding=1),
+
+            # Upsample 6x6 -> 12x12
+            nn.Upsample(scale_factor=2, mode='nearest'),
+            nn.Conv2d(512, 256, kernel_size=3, padding=1),
             nn.ReLU(),
-            # Upsample -> 8*H_feat x 8*W_feat, 256ch -> 128ch
-            nn.ConvTranspose2d(256, 128, kernel_size=3, stride=2, padding=1, output_padding=1),
+
+            # Upsample 12x12 -> 24x24
+            nn.Upsample(scale_factor=2, mode='nearest'),
+            nn.Conv2d(256, 128, kernel_size=3, padding=1),
             nn.ReLU(),
-            # Upsample -> 16*H_feat x 16*W_feat, 128ch -> 64ch
-            nn.ConvTranspose2d(128, 64, kernel_size=3, stride=2, padding=1, output_padding=1),
+
+            # Upsample 24x24 -> 48x48
+            nn.Upsample(scale_factor=2, mode='nearest'),
+            nn.Conv2d(128, 64, kernel_size=3, padding=1),
             nn.ReLU(),
-            # Upsample -> 32*H_feat x 32*W_feat, 64ch -> 64ch
-            nn.ConvTranspose2d(64, 64, kernel_size=3, stride=2, padding=1, output_padding=1),
+
+            # Upsample 48x48 -> 96x96
+            nn.Upsample(scale_factor=2, mode='nearest'),
+            nn.Conv2d(64, 64, kernel_size=3, padding=1),
             nn.ReLU(),
-            # Final layer to get to 3 channels for the image, no spatial change
-            nn.ConvTranspose2d(64, decoder_output_channels, kernel_size=3, stride=1, padding=1),
+
+            # Final layer to get to 3 channels for the image
+            nn.Conv2d(64, decoder_output_channels, kernel_size=3, padding=1),
             nn.Sigmoid(), # To ensure pixel values are in [0, 1]
         )
     
