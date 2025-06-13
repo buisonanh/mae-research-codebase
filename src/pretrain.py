@@ -17,10 +17,10 @@ def train_autoencoder(train_loader, val_loader, test_loader, model_keypoints, mo
     """Train the autoencoder model."""
     model.to(DEVICE)
     criterion = nn.MSELoss()
-    if ENCODER_MODEL.startswith("convnext"):
-        optimizer = optim.SGD(model.parameters(), lr=LEARNING_RATE)
-    elif ENCODER_MODEL.startswith("resnet"):
-        optimizer = optim.AdamW(model.parameters(), lr=LEARNING_RATE)
+    # if ENCODER_MODEL.startswith("convnext"):
+    #     optimizer = optim.SGD(model.parameters(), lr=LEARNING_RATE)
+    # elif ENCODER_MODEL.startswith("resnet"):
+    optimizer = optim.AdamW(model.parameters(), lr=LEARNING_RATE)
 
     print(f"Using optimizer: {optimizer.__class__.__name__}")
     

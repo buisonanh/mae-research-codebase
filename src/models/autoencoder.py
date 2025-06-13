@@ -18,8 +18,13 @@ class Encoder(nn.Module):
         x = self.encoder.forward_features(x)
         return x
 
+
+# class ConvNeXtv2NanoDecoder(nn.Module):
+#     def __init__(self, decoder_embed_dim=640, decoder_depth=4):
+#         super(ConvNeXtv2NanoDecoder, self).__init__()
+
 class ConvNeXtv2TinyDecoder(nn.Module):
-    def __init__(self, decoder_embed_dim=512, decoder_depth=4): # Added parameters
+    def __init__(self, decoder_embed_dim=768, decoder_depth=4): # Added parameters
         super(ConvNeXtv2TinyDecoder, self).__init__()
         
         encoder_output_channels = 768 
@@ -35,8 +40,8 @@ class ConvNeXtv2TinyDecoder(nn.Module):
         # These blocks will operate at the feature resolution of the encoder output
         # and use decoder_embed_dim channels.
         # Using ConvNeXtBlock from timm.models.convnext
-        decoder_blocks_list = [ConvNeXtBlock(in_chs=decoder_embed_dim) for _ in range(decoder_depth)]
-        self.decoder_blocks = nn.Sequential(*decoder_blocks_list)
+        # Forcing a single block for diagnosis, ignoring decoder_depth for this part
+        self.single_convnext_block = ConvNeXtBlock(in_chs=decoder_embed_dim)
         
         # Upsampling layers to reconstruct the image
         # The input to the upsampler now comes from self.decoder_blocks, 
@@ -70,7 +75,7 @@ class ConvNeXtv2TinyDecoder(nn.Module):
         # Pass through decoder blocks
         # Note: The paper's example includes mask token handling here for MAE.
         # If this is an MAE, that logic would be added around here.
-        x = self.decoder_blocks(x)
+        x = self.single_convnext_block(x)
         
         # Upsample to reconstruct image
         x = self.upsampler(x)
