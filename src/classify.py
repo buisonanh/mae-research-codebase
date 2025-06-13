@@ -16,67 +16,87 @@ import json
 from src.config import (
     DEVICE, TARGET_SIZE, BATCH_SIZE, NUM_WORKERS, CLASSIFY_DATASET_NAME,
     MEAN, STD, DATASET_PATHS, NUM_CLASSES,
-    CLASSIFIER_NUM_EPOCHS, CLASSIFIER_LEARNING_RATE, PRETRAIN_FOLDER, CLASSIFICATION_FOLDER
+    CLASSIFIER_NUM_EPOCHS, CLASSIFIER_LEARNING_RATE, PRETRAIN_FOLDER, CLASSIFICATION_FOLDER, ENCODER_MODEL
 )
 
 def create_model(weights_path=None, num_classes=None):
     """Create and initialize the classification model.
-    
+
     Args:
-        weights_path: Optional path to a pretrained checkpoint. If None, uses the default path
-                     or PRETRAINED_CHECKPOINT_PATH from config if specified.
+        weights_path: Optional path to a pretrained checkpoint. If None, uses PyTorch default
+                      pretrained weights for the ENCODER_MODEL.
         num_classes: Number of output classes. If None, uses the value from config.
     """
     if num_classes is None:
         num_classes = NUM_CLASSES[CLASSIFY_DATASET_NAME]
-    
-    # Determine which weights to load
+
     if weights_path is None:
-        weights_path = os.path.join(PRETRAIN_FOLDER, 'mae_checkpoints', 'best_model.pth')
-    
-    # Create model
-    model = timm.create_model(
-        model_name="resnet18",
-        pretrained=False,
-    )
-    model.fc = nn.Identity()
-    model.global_pool = nn.Identity()
-    
-    # Load pretrained weights if specified
-    if weights_path is not None:
-        print(f"Loading pretrained weights from: {weights_path}")
-        weights = torch.load(weights_path, map_location=DEVICE)
-        
-        # Check if these are encoder weights or full model weights
-        if any(k.startswith("encoder.") for k in weights.keys()):
-            # Extract encoder weights from autoencoder
-            encoder_weights = {k.replace("encoder.", ""): v for k, v in weights.items() if k.startswith("encoder.")}
-            model.load_state_dict(encoder_weights)
-        else:
-            # Try to load weights directly (might be from a previous classification model)
-            try:
-                model.load_state_dict(weights)
-            except RuntimeError:
-                print("Warning: Could not load weights directly. The model architecture might be different.")
-                # If direct loading fails, try to load only the matching layers
-                model_dict = model.state_dict()
-                pretrained_dict = {k: v for k, v in weights.items() if k in model_dict and model_dict[k].shape == v.shape}
-                model_dict.update(pretrained_dict)
-                model.load_state_dict(model_dict)
+        # Load PyTorch default pretrained weights and let timm handle the classifier head
+        print(f"Loading PyTorch default pretrained weights for {ENCODER_MODEL} with {num_classes} classes.")
+        model = timm.create_model(
+            model_name=ENCODER_MODEL,
+            pretrained=True,
+            num_classes=num_classes  # This ensures the model has the correct output shape
+        )
+        # No need to manually replace fc or global_pool if num_classes is set appropriately.
+        # timm handles creating a suitable head.
+
     else:
-        # Use default pretrained weights
-        print("Loading default pretrained weights")
-        weights = torch.load(os.path.join(PRETRAIN_FOLDER, 'mae_checkpoints', 'best_model.pth'), map_location=DEVICE)
-        encoder_weights = {k.replace("encoder.", ""): v for k, v in weights.items() if k.startswith("encoder.")}
-        model.load_state_dict(encoder_weights)
-    
-    # Add classification head
-    model.global_pool = nn.AdaptiveAvgPool2d(1)
-    model.fc = nn.Sequential(
-        nn.Flatten(),
-        nn.Linear(in_features=512, out_features=num_classes)
-    )
-    
+        # Load weights from a specified checkpoint file (e.g., MAE encoder)
+        # First, create the base model without a classification head (num_classes=0 for feature extraction)
+        print(f"Creating base model {ENCODER_MODEL} for feature extraction (loading from path: {weights_path})")
+        feature_extractor = timm.create_model(
+            model_name=ENCODER_MODEL,
+            pretrained=False, # We are loading weights from a file
+            num_classes=0     # Creates a feature extractor (removes classifier head and global pool)
+        )
+
+        print(f"Loading pretrained weights from checkpoint: {weights_path}")
+        weights = torch.load(weights_path, map_location=DEVICE)
+
+        # Check if these are MAE encoder weights or full model weights
+        # MAE pretraining often saves only the encoder part.
+        if any(k.startswith("encoder.") for k in weights.keys()):
+            print("Detected MAE-style encoder weights (prefixed with 'encoder.'). Extracting and loading.")
+            # Filter and rename keys for the encoder
+            encoder_weights = {k.replace("encoder.", ""): v for k, v in weights.items() if k.startswith("encoder.")}
+            missing_keys, unexpected_keys = feature_extractor.load_state_dict(encoder_weights, strict=False)
+        elif 'model' in weights:
+            print("Detected checkpoint with 'model' key. Attempting to load state_dict from weights['model'].")
+            missing_keys, unexpected_keys = feature_extractor.load_state_dict(weights['model'], strict=False)
+        elif 'state_dict' in weights:
+            print("Detected checkpoint with 'state_dict' key. Attempting to load state_dict from weights['state_dict'].")
+            missing_keys, unexpected_keys = feature_extractor.load_state_dict(weights['state_dict'], strict=False)
+        else:
+            print("Attempting to load weights directly (assuming full model or compatible encoder checkpoint).")
+            missing_keys, unexpected_keys = feature_extractor.load_state_dict(weights, strict=False)
+
+        if missing_keys:
+            print(f"Warning: Missing keys when loading weights: {missing_keys}")
+        if unexpected_keys:
+            print(f"Warning: Unexpected keys when loading weights: {unexpected_keys}")
+
+        # Now, add the classification head to the feature_extractor
+        try:
+            in_features = feature_extractor.num_features
+        except AttributeError:
+            # Fallback if num_features is not directly available after num_classes=0
+            # This might happen if timm model with num_classes=0 doesn't expose num_features directly.
+            # We can try to infer it by running a dummy input or by checking the last layer's output channels.
+            # For simplicity, we'll try to get it from a temporary model instance with a head.
+            temp_model_for_features = timm.create_model(ENCODER_MODEL, pretrained=False, num_classes=1)
+            in_features = temp_model_for_features.num_features
+            del temp_model_for_features
+            print(f"Inferred in_features as {in_features} for {ENCODER_MODEL}.")
+
+        # Define the full model with the loaded feature_extractor and a new head
+        model = nn.Sequential(
+            feature_extractor,
+            nn.AdaptiveAvgPool2d((1, 1)), # Global average pooling
+            nn.Flatten(),                 # Flatten to [batch_size, features]
+            nn.Linear(in_features, num_classes) # Classifier
+        )
+
     return model
 
 def get_data_transforms():

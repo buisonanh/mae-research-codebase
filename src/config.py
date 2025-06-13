@@ -3,7 +3,7 @@ import os
 import json
 
 # Device configuration
-DEVICE = torch.device('cuda:0')
+DEVICE = torch.device('cpu')
 
 # Dataset parameters
 TARGET_SIZE = 96

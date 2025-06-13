@@ -19,44 +19,60 @@ class Encoder(nn.Module):
         return x
 
 class ConvNeXtv2TinyDecoder(nn.Module):
-    def __init__(self):
+    def __init__(self, decoder_embed_dim=512, decoder_depth=4): # Added parameters
         super(ConvNeXtv2TinyDecoder, self).__init__()
         
         encoder_output_channels = 768 
         decoder_output_channels = 3
 
-        # A single ConvNeXt block from timm.models.convnext
-        # It processes features at the same spatial resolution and can transform channel depth if configured.
-        # Here, in_chs=encoder_output_channels means it expects 768 channels and will output 768 channels by default.
-        self.convnext_block = ConvNeXtBlock(in_chs=encoder_output_channels) # Uses default parameters for the block
+        # 1. Projection layer to map encoder output to decoder_embed_dim
+        self.proj = nn.Conv2d(
+            in_channels=encoder_output_channels, 
+            out_channels=decoder_embed_dim, 
+            kernel_size=1)
 
-        # Upsampling layers to reconstruct the image from the features processed by ConvNeXtBlock
+        # 2. Sequence of ConvNeXt Blocks for decoding
+        # These blocks will operate at the feature resolution of the encoder output
+        # and use decoder_embed_dim channels.
+        # Using ConvNeXtBlock from timm.models.convnext
+        decoder_blocks_list = [ConvNeXtBlock(in_chs=decoder_embed_dim) for _ in range(decoder_depth)]
+        self.decoder_blocks = nn.Sequential(*decoder_blocks_list)
+        
+        # Upsampling layers to reconstruct the image
+        # The input to the upsampler now comes from self.decoder_blocks, 
+        # so it has decoder_embed_dim channels.
         self.upsampler = nn.Sequential(
-            # Input to upsampler is [B, 768, H_feat, W_feat] (e.g., [B, 768, 3, 3])
-            # Upsample 3x3 -> 6x6, 768ch -> 512ch
-            nn.ConvTranspose2d(encoder_output_channels, 512, kernel_size=3, stride=2, padding=1, output_padding=1),
+            # Input: [B, decoder_embed_dim, H_feat, W_feat]
+            # Upsample H_feat x W_feat -> 2*H_feat x 2*W_feat, decoder_embed_dim -> 512ch
+            nn.ConvTranspose2d(decoder_embed_dim, 512, kernel_size=3, stride=2, padding=1, output_padding=1), # MODIFIED: in_channels
             nn.ReLU(),
-            # Upsample 6x6 -> 12x12, 512ch -> 256ch
+            # Upsample -> 4*H_feat x 4*W_feat, 512ch -> 256ch
             nn.ConvTranspose2d(512, 256, kernel_size=3, stride=2, padding=1, output_padding=1),
             nn.ReLU(),
-            # Upsample 12x12 -> 24x24, 256ch -> 128ch
+            # Upsample -> 8*H_feat x 8*W_feat, 256ch -> 128ch
             nn.ConvTranspose2d(256, 128, kernel_size=3, stride=2, padding=1, output_padding=1),
             nn.ReLU(),
-            # Upsample 24x24 -> 48x48, 128ch -> 64ch
+            # Upsample -> 16*H_feat x 16*W_feat, 128ch -> 64ch
             nn.ConvTranspose2d(128, 64, kernel_size=3, stride=2, padding=1, output_padding=1),
             nn.ReLU(),
-            # Upsample 48x48 -> 96x96, 64ch -> 64ch
+            # Upsample -> 32*H_feat x 32*W_feat, 64ch -> 64ch
             nn.ConvTranspose2d(64, 64, kernel_size=3, stride=2, padding=1, output_padding=1),
             nn.ReLU(),
-            # Final layer to get to 3 channels for the image, no spatial change from 96x96
+            # Final layer to get to 3 channels for the image, no spatial change
             nn.ConvTranspose2d(64, decoder_output_channels, kernel_size=3, stride=1, padding=1),
             nn.Sigmoid(), # To ensure pixel values are in [0, 1]
         )
     
     def forward(self, x):
-        # Pass input through the ConvNeXt block first
-        x = self.convnext_block(x)
-        # Then through the upsampler
+        # Project encoder features
+        x = self.proj(x)
+        
+        # Pass through decoder blocks
+        # Note: The paper's example includes mask token handling here for MAE.
+        # If this is an MAE, that logic would be added around here.
+        x = self.decoder_blocks(x)
+        
+        # Upsample to reconstruct image
         x = self.upsampler(x)
         return x
 
