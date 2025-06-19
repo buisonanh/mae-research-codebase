@@ -19,7 +19,7 @@ NUM_CLASSES = {
 ENCODER_MODEL = "resnet18" # [resnet18, convnextv2_tiny]
 
 # Maskng strategy
-MASKING_STRATEGY = "random-jigsaw" # "keypoints-jigsaw", "random-jigsaw", "random"
+MASKING_STRATEGY = "combined-keypoints-jigsaw-random-mask" # "keypoints-jigsaw", "random-jigsaw", "random", "combined-keypoints-jigsaw-random-mask"
 
 # Model parameters
 PATCH_SIZE = 16

@@ -9,7 +9,7 @@ import json
 from src.config import *
 from src.models.autoencoder import Autoencoder
 from src.data.dataset import create_pretrain_data_loaders
-from src.utils.masking import random_jigsaw_mask_keypoints, random_jigsaw_mask, random_mask
+from src.utils.masking import random_jigsaw_mask_keypoints, random_jigsaw_mask, random_mask, combined_keypoints_jigsaw_random_mask
 from src.utils.visualization import plot_loss_curve, save_reconstruction_samples, save_training_results, format_config_params
 from src.utils.train_keypoints import load_and_train_keypoints
     
@@ -45,6 +45,7 @@ def train_autoencoder(train_loader, val_loader, test_loader, model_keypoints, mo
             
             if masking_strategy == "keypoints-jigsaw":
                 # Predict keypoints
+                print("Using keypoints-jigsaw strategy")
                 with torch.no_grad():
                     keypoints_flat = model_keypoints(imgs_gray)
                     predicted_keypoints = keypoints_flat.view(-1, 15, 2)
@@ -56,17 +57,35 @@ def train_autoencoder(train_loader, val_loader, test_loader, model_keypoints, mo
                     patch_size=PATCH_SIZE
                 )
             elif masking_strategy == "random-jigsaw":
+                print("Using random-jigsaw strategy")
                 masked_imgs = random_jigsaw_mask(
                     imgs.clone(),
                     patch_size=PATCH_SIZE,
                     shuffle_ratio=MASK_RATIO
                 )
             elif masking_strategy == "random":
+                print("Using random strategy")
                 masked_imgs = random_mask(
                     imgs.clone(),
                     patch_size=PATCH_SIZE,
                     mask_ratio=MASK_RATIO
                 )
+            elif masking_strategy == "combined-keypoints-jigsaw-random-mask":
+                print("Using combined-keypoints-jigsaw-random-mask strategy")
+                # Predict keypoints
+                with torch.no_grad():
+                    keypoints_flat = model_keypoints(imgs_gray)
+                    predicted_keypoints = keypoints_flat.view(-1, NUM_KEYPOINTS, 2)
+                
+                # Apply combined masking
+                masked_imgs = combined_keypoints_jigsaw_random_mask(
+                    imgs.clone(),
+                    predicted_keypoints,
+                    patch_size=PATCH_SIZE,
+                    random_mask_ratio=MASK_RATIO # Using MASK_RATIO for the random part
+                )
+            else:
+                raise ValueError(f"Unknown masking strategy: {masking_strategy}")
             
             # Convert back to 3-channel format for the autoencoder
             if masked_imgs.shape[1] == 1:
@@ -127,6 +146,18 @@ def train_autoencoder(train_loader, val_loader, test_loader, model_keypoints, mo
                         patch_size=PATCH_SIZE,
                         mask_ratio=MASK_RATIO
                     )
+                elif masking_strategy == "combined-keypoints-jigsaw-random-mask":
+                    # Predict keypoints
+                    keypoints_flat = model_keypoints(imgs_gray)
+                    predicted_keypoints = keypoints_flat.view(-1, NUM_KEYPOINTS, 2)
+                    
+                    # Apply combined masking
+                    masked_imgs = combined_keypoints_jigsaw_random_mask(
+                        imgs.clone(), 
+                        predicted_keypoints, 
+                        patch_size=PATCH_SIZE,
+                        random_mask_ratio=MASK_RATIO # Using MASK_RATIO for the random part
+                    )
                 
                 if masked_imgs.shape[1] == 1:
                     masked_imgs = masked_imgs.repeat(1, 3, 1, 1)
@@ -183,8 +214,8 @@ def main():
 
     print(f"Start pretraining with {MASKING_STRATEGY} strategy on {PRETRAIN_DATASET_NAME} dataset.")
 
-    # Load data and train keypoint model if using keypoints-jigsaw
-    if MASKING_STRATEGY == "keypoints-jigsaw":
+    # Load data and train keypoint model if using keypoints-jigsaw or combined strategy
+    if MASKING_STRATEGY == "keypoints-jigsaw" or MASKING_STRATEGY == "combined-keypoints-jigsaw-random-mask":
         os.makedirs(os.path.join(PRETRAIN_FOLDER, 'keypoints_checkpoint'), exist_ok=True)
         print("Loading keypoints dataset and training keypoint model...")
         keypoint_model = load_and_train_keypoints()
