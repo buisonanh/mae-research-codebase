@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from functools import partial
-from src.utils.masking import partial_jigsaw_mask_keypoints, random_mask, partial_jigsaw_mask
+from src.utils.masking import random_jigsaw_mask_keypoints, random_mask, random_jigsaw_mask
 import os
 
 def display_image_with_keypoints(image_path, keypoints):
@@ -79,7 +79,7 @@ def save_reconstruction_samples(model, model_keypoints, test_loader, device, sav
             predicted_keypoints = keypoints_flat.view(-1, num_keypoints, 2)
 
             # 2) Apply masking
-            masked_img = partial_jigsaw_mask_keypoints(
+            masked_img = random_jigsaw_mask_keypoints(
                 data.clone(),
                 keypoints=predicted_keypoints,
                 patch_size=patch_size
@@ -93,7 +93,7 @@ def save_reconstruction_samples(model, model_keypoints, test_loader, device, sav
             )
         elif masking_strategy == "random-jigsaw":
             # Apply random jigsaw masking
-            masked_img = partial_jigsaw_mask(
+            masked_img = random_jigsaw_mask(
                 data.clone(),
                 patch_size=patch_size,
                 shuffle_ratio=0.4

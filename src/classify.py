@@ -32,10 +32,10 @@ def create_model(weights_path=None, num_classes=None):
 
     if weights_path is None:
         # Load PyTorch default pretrained weights and let timm handle the classifier head
-        print(f"Loading PyTorch default pretrained weights for {ENCODER_MODEL} with {num_classes} classes.")
+        print(f"Loading PyTorch non-pretrained {ENCODER_MODEL} with {num_classes} classes.")
         model = timm.create_model(
             model_name=ENCODER_MODEL,
-            pretrained=True,
+            pretrained=False,
             num_classes=num_classes  # This ensures the model has the correct output shape
         )
         # No need to manually replace fc or global_pool if num_classes is set appropriately.

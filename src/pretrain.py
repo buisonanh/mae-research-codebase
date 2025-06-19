@@ -9,7 +9,7 @@ import json
 from src.config import *
 from src.models.autoencoder import Autoencoder
 from src.data.dataset import create_pretrain_data_loaders
-from src.utils.masking import partial_jigsaw_mask_keypoints, partial_jigsaw_mask, random_mask
+from src.utils.masking import random_jigsaw_mask_keypoints, random_jigsaw_mask, random_mask
 from src.utils.visualization import plot_loss_curve, save_reconstruction_samples, save_training_results, format_config_params
 from src.utils.train_keypoints import load_and_train_keypoints
     
@@ -50,13 +50,13 @@ def train_autoencoder(train_loader, val_loader, test_loader, model_keypoints, mo
                     predicted_keypoints = keypoints_flat.view(-1, 15, 2)
                 
                 # Apply masking
-                masked_imgs = partial_jigsaw_mask_keypoints(
+                masked_imgs = random_jigsaw_mask_keypoints(
                     imgs.clone(), 
                     predicted_keypoints, 
                     patch_size=PATCH_SIZE
                 )
             elif masking_strategy == "random-jigsaw":
-                masked_imgs = partial_jigsaw_mask(
+                masked_imgs = random_jigsaw_mask(
                     imgs.clone(),
                     patch_size=PATCH_SIZE,
                     shuffle_ratio=MASK_RATIO
@@ -110,13 +110,13 @@ def train_autoencoder(train_loader, val_loader, test_loader, model_keypoints, mo
                     predicted_keypoints = keypoints_flat.view(-1, 15, 2)
                     
                     # Apply masking
-                    masked_imgs = partial_jigsaw_mask_keypoints(
+                    masked_imgs = random_jigsaw_mask_keypoints(
                         imgs.clone(), 
                         predicted_keypoints, 
                         patch_size=PATCH_SIZE
                     )
                 elif masking_strategy == "random-jigsaw":
-                    masked_imgs = partial_jigsaw_mask(
+                    masked_imgs = random_jigsaw_mask(
                         imgs.clone(),
                         patch_size=PATCH_SIZE,
                         shuffle_ratio=MASK_RATIO

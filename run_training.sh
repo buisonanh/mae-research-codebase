@@ -47,7 +47,7 @@ if $CLASSIFY; then
         echo "Using checkpoint: $CHECKPOINT"
         python -m src.classify --checkpoint "$CHECKPOINT"
     else
-        echo "Using default pretrained weights"
+        echo "No pretrain checkpoint provided. Using non-pretrained model."
         python -m src.classify
     fi
     

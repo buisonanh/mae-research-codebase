@@ -16,7 +16,7 @@ NUM_CLASSES = {
     "affectnet": 8  # For AffectNet dataset
 }
 
-ENCODER_MODEL = "convnextv2_tiny" # [resnet18, convnextv2_tiny]
+ENCODER_MODEL = "resnet18" # [resnet18, convnextv2_tiny]
 
 # Maskng strategy
 MASKING_STRATEGY = "random-jigsaw" # "keypoints-jigsaw", "random-jigsaw", "random"
@@ -32,7 +32,7 @@ MASK_RATIO = 0.75
 
 # Training parameters
 AUTOENCODER_NUM_EPOCHS = 1
-CLASSIFIER_NUM_EPOCHS = 1
+CLASSIFIER_NUM_EPOCHS = 2
 KEYPOINT_NUM_EPOCHS = 20
 
 LEARNING_RATE = 0.001
@@ -48,8 +48,8 @@ STD = [0.5, 0.5, 0.5]
 
 # Dataset paths
 DATASET_PATHS = {
-    "rafdb": "datasets/raf-db-dataset/DATASET/train",
-    "affectnet": "datasets/affectnet/AffectNet/train",
+    "rafdb": "datasets/raf-db-dataset/DATASET",
+    "affectnet": "datasets/affectnet/AffectNet",
     "keypoints": "datasets/keypoints/training_data/training.csv"
 }
 

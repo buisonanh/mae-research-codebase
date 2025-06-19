@@ -4,7 +4,27 @@ import numpy as np
 from torch import nn
 from src.config import PATCH_SIZE
 
-def partial_jigsaw_mask_keypoints(image, keypoints, patch_size=PATCH_SIZE):
+
+class Patchify(nn.Module):
+    def __init__(self, patch_size):
+        super().__init__()
+        self.p = patch_size
+        self.unfold = torch.nn.Unfold(kernel_size=patch_size, stride=patch_size)
+
+    def forward(self, x):
+        # x -> B c h w
+        bs, c, h, w = x.shape
+        
+        x = self.unfold(x)
+        # x -> B (c*p*p) L
+        
+        # Reshaping into the shape we want
+        a = x.view(bs, c, self.p, self.p, -1).permute(0, 4, 1, 2, 3)
+        # a -> ( B no.of patches c p p )
+        return a
+
+
+def random_jigsaw_mask_keypoints(image, keypoints, patch_size=PATCH_SIZE):
     # If keypoints is 2D, add a batch dimension
     if keypoints.ndim == 2:
         keypoints = keypoints.unsqueeze(0)
@@ -51,26 +71,7 @@ def partial_jigsaw_mask_keypoints(image, keypoints, patch_size=PATCH_SIZE):
     return shuffled_image 
 
 
-
-class Patchify(nn.Module):
-    def __init__(self, patch_size):
-        super().__init__()
-        self.p = patch_size
-        self.unfold = torch.nn.Unfold(kernel_size=patch_size, stride=patch_size)
-
-    def forward(self, x):
-        # x -> B c h w
-        bs, c, h, w = x.shape
-        
-        x = self.unfold(x)
-        # x -> B (c*p*p) L
-        
-        # Reshaping into the shape we want
-        a = x.view(bs, c, self.p, self.p, -1).permute(0, 4, 1, 2, 3)
-        # a -> ( B no.of patches c p p )
-        return a
-
-def partial_jigsaw_mask(image, patch_size=32, shuffle_ratio=0.4):
+def random_jigsaw_mask(image, patch_size=32, shuffle_ratio=0.4):
     """
     Partially shuffle patches in a batch of images.
     Args:
