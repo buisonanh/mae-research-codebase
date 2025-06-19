@@ -3,41 +3,47 @@ import os
 import json
 
 # Device configuration
-DEVICE = torch.device('cpu')
+DEVICE = torch.device(os.environ.get('DEVICE', 'cuda:2'))
 
 # Dataset parameters
 TARGET_SIZE = 96
+<<<<<<< HEAD
 BATCH_SIZE = 64
+=======
+BATCH_SIZE = 512
+>>>>>>> 1aec52fb99e2ac80e1e60311c4ba6801c48d546e
 NUM_WORKERS = 4
-PRETRAIN_DATASET_NAME = "affectnet"  # Dataset for pretraining
-CLASSIFY_DATASET_NAME = "rafdb"  # Dataset for classification
+import os
+
+PRETRAIN_DATASET_NAME = os.environ.get('PRETRAIN_DATASET_NAME', 'affectnet')
+CLASSIFY_DATASET_NAME = os.environ.get('CLASSIFY_DATASET_NAME', 'rafdb')
 NUM_CLASSES = {
     "rafdb": 7,  # For RAF-DB dataset
     "affectnet": 8  # For AffectNet dataset
 }
 
-ENCODER_MODEL = "resnet18" # [resnet18, convnextv2_tiny]
+ENCODER_MODEL = os.environ.get('ENCODER_MODEL', 'resnet18') # [resnet18, convnextv2_tiny]
 
-# Maskng strategy
-MASKING_STRATEGY = "combined-keypoints-jigsaw-random-mask" # "keypoints-jigsaw", "random-jigsaw", "random", "combined-keypoints-jigsaw-random-mask"
+# Masking strategy
+MASKING_STRATEGY = os.environ.get('MASKING_STRATEGY', 'random') # "keypoints-jigsaw", "random-jigsaw", "random", "combined-keypoints-jigsaw-random-mask"
 
 # Model parameters
-PATCH_SIZE = 16
+PATCH_SIZE = int(os.environ.get('PATCH_SIZE', 16))
 
 # For keypoints-based jigsaw masking
-NUM_KEYPOINTS = 15
+NUM_KEYPOINTS = int(os.environ.get('NUM_KEYPOINTS', 15))
 
 # For random jigsaw masking and jigsaw masking only
-MASK_RATIO = 0.75
+MASK_RATIO = float(os.environ.get('MASK_RATIO', 0.75))
 
 # Training parameters
-AUTOENCODER_NUM_EPOCHS = 1
-CLASSIFIER_NUM_EPOCHS = 2
-KEYPOINT_NUM_EPOCHS = 20
+AUTOENCODER_NUM_EPOCHS = int(os.environ.get('AUTOENCODER_NUM_EPOCHS', 50))
+CLASSIFIER_NUM_EPOCHS = int(os.environ.get('CLASSIFIER_NUM_EPOCHS', 120))
+KEYPOINT_NUM_EPOCHS = int(os.environ.get('KEYPOINT_NUM_EPOCHS', 20))
 
-LEARNING_RATE = 0.001
-CLASSIFIER_LEARNING_RATE = 0.001
-EARLY_STOPPING_PATIENCE = 5
+LEARNING_RATE = float(os.environ.get('LEARNING_RATE', 0.001))
+CLASSIFIER_LEARNING_RATE = float(os.environ.get('CLASSIFIER_LEARNING_RATE', 0.001))
+EARLY_STOPPING_PATIENCE = int(os.environ.get('EARLY_STOPPING_PATIENCE', 5))
 
 # Image normalization parameters
 # MEAN = [0.485, 0.456, 0.406]
