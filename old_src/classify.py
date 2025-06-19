@@ -36,11 +36,10 @@ def create_model(weights_path=None, num_classes=None):
     
     # Create model
     model = timm.create_model(
-        model_name="resnet18",
+        model_name="vit_small_patch16_224",
         pretrained=False,
+        num_classes=0
     )
-    model.fc = nn.Identity()
-    model.global_pool = nn.Identity()
     
     # Load pretrained weights if specified
     if weights_path is not None:

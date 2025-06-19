@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from functools import partial
-from src.config import MASK_RATIO, NUM_KEYPOINTS
+from src.utils.masking import partial_jigsaw_mask_keypoints, random_mask
 import os
 
 def display_image_with_keypoints(image_path, keypoints):
@@ -44,7 +44,7 @@ def plot_loss_curve(train_loss_values, val_loss_values, save_path=None):
         plt.savefig(save_path, dpi=300)
     plt.show()
 
-def save_reconstruction_samples(model, model_keypoints, test_loader, device, save_path, patch_size, num_samples=7, masking_strategy="random-jigsaw"):
+def save_reconstruction_samples(model, model_keypoints, test_loader, device, save_path, patch_size, num_samples=7):
     """Save visualization of reconstruction samples.
     
     Args:
@@ -71,43 +71,26 @@ def save_reconstruction_samples(model, model_keypoints, test_loader, device, sav
     data = data.to(device)
 
     with torch.no_grad():
-        # Predict keypoints if needed for the strategy
-        predicted_keypoints = None
-        if masking_strategy in ["keypoints-jigsaw", "combined-keypoints-jigsaw-random-mask"]:
-            if model_keypoints is None:
-                raise ValueError("Keypoint model is required for this masking strategy but was not provided.")
+        if model_keypoints is not None:
+            # 1) Generate keypoints
             data_gray = data.mean(dim=1, keepdim=True)
             keypoints_flat = model_keypoints(data_gray)
-            predicted_keypoints = keypoints_flat.view(-1, NUM_KEYPOINTS, 2)
+            num_keypoints = 15
+            predicted_keypoints = keypoints_flat.view(-1, num_keypoints, 2)
 
-        # Apply masking based on the strategy
-        if masking_strategy == "keypoints-jigsaw":
-            masked_img = random_jigsaw_mask_keypoints(
+            # 2) Apply masking
+            masked_img = partial_jigsaw_mask_keypoints(
                 data.clone(),
                 keypoints=predicted_keypoints,
                 patch_size=patch_size
             )
-        elif masking_strategy == "combined-keypoints-jigsaw-random-mask":
-            masked_img = combined_keypoints_jigsaw_random_mask(
-                data.clone(),
-                keypoints=predicted_keypoints,
-                patch_size=patch_size,
-                random_mask_ratio=MASK_RATIO
-            )
-        elif masking_strategy == "random":
+        else:
+            # Apply random masking
             masked_img = random_mask(
                 data.clone(),
                 patch_size=patch_size,
-                mask_ratio=MASK_RATIO
+                mask_ratio=0.4
             )
-        elif masking_strategy == "random-jigsaw":
-            masked_img = random_jigsaw_mask(
-                data.clone(),
-                patch_size=patch_size,
-                shuffle_ratio=MASK_RATIO
-            )
-        else:
-            raise ValueError(f"Unknown masking strategy for visualization: {masking_strategy}")
             
         # Convert to 3 channels for model input if needed
         if masked_img.shape[1] == 1:

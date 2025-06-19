@@ -45,7 +45,7 @@ class FacialKeypointsDataset(Dataset):
 
 def get_transform():
     return transforms.Compose([
-        transforms.Grayscale(num_output_channels=3),  # Ensure 3 channels for ViT MAE
+        transforms.Grayscale(num_output_channels=1),
         transforms.Resize((TARGET_SIZE, TARGET_SIZE)),
         transforms.ToTensor(),
     ])
@@ -98,34 +98,19 @@ def create_keypoints_data_loaders(train_df, val_df, test_df):
 #         num_workers=NUM_WORKERS
 #     )
 
-import os
-from torch.utils.data import random_split
-
 def create_pretrain_data_loaders():
     transform = get_transform()
-    train_root = DATASET_PATHS[PRETRAIN_DATASET_NAME]
-    val_root = train_root.replace('train', 'val')
-    test_root = train_root.replace('train', 'test')
-
+    
     train_dataset = datasets.ImageFolder(
-        root=train_root,
+        root=DATASET_PATHS[PRETRAIN_DATASET_NAME],
         transform=transform
     )
-    # Check if val directory exists
-    if os.path.isdir(val_root):
-        val_dataset = datasets.ImageFolder(
-            root=val_root,
-            transform=transform
-        )
-    else:
-        # Split train set for validation
-        val_ratio = 0.1
-        val_size = int(len(train_dataset) * val_ratio)
-        train_size = len(train_dataset) - val_size
-        train_dataset, val_dataset = random_split(train_dataset, [train_size, val_size])
-
+    val_dataset = datasets.ImageFolder(
+        root=DATASET_PATHS[PRETRAIN_DATASET_NAME].replace('train', 'val'),
+        transform=transform
+    )
     test_dataset = datasets.ImageFolder(
-        root=test_root,
+        root=DATASET_PATHS[PRETRAIN_DATASET_NAME].replace('train', 'test'),
         transform=transform
     )
     
