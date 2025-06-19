@@ -40,6 +40,14 @@ if $PRETRAIN; then
     echo "Pretraining completed successfully!"
 fi
 
+# Extract SAVE_PATH from config.py using Python
+SAVE_PATH=$(python -c "from src.config import SAVE_PATH; print(SAVE_PATH)")
+CHECKPOINT_PATH="$SAVE_PATH/pretrain_checkpoints/mae_checkpoints/best_model.pth"
+
+if [ -z "$CHECKPOINT" ]; then
+    CHECKPOINT=$CHECKPOINT_PATH
+fi
+
 # Run classification if not skipped
 if $CLASSIFY; then
     echo "Starting classification"
