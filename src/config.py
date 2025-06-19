@@ -7,11 +7,7 @@ DEVICE = torch.device(os.environ.get('DEVICE', 'cuda:2'))
 
 # Dataset parameters
 TARGET_SIZE = 96
-<<<<<<< HEAD
-BATCH_SIZE = 64
-=======
 BATCH_SIZE = 512
->>>>>>> 1aec52fb99e2ac80e1e60311c4ba6801c48d546e
 NUM_WORKERS = 4
 import os
 
