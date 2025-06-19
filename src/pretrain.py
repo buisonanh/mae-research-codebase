@@ -15,6 +15,7 @@ from src.utils.train_keypoints import load_and_train_keypoints
     
 def train_autoencoder(train_loader, val_loader, test_loader, model_keypoints, model, num_epochs, masking_strategy):
     """Train the autoencoder model."""
+    print(f"Using masking strategy in train_autoencoder: {masking_strategy}")
     model.to(DEVICE)
     criterion = nn.MSELoss()
     # if ENCODER_MODEL.startswith("convnext"):
@@ -45,7 +46,6 @@ def train_autoencoder(train_loader, val_loader, test_loader, model_keypoints, mo
             
             if masking_strategy == "keypoints-jigsaw":
                 # Predict keypoints
-                print("Using keypoints-jigsaw strategy")
                 with torch.no_grad():
                     keypoints_flat = model_keypoints(imgs_gray)
                     predicted_keypoints = keypoints_flat.view(-1, 15, 2)
@@ -57,21 +57,18 @@ def train_autoencoder(train_loader, val_loader, test_loader, model_keypoints, mo
                     patch_size=PATCH_SIZE
                 )
             elif masking_strategy == "random-jigsaw":
-                print("Using random-jigsaw strategy")
                 masked_imgs = random_jigsaw_mask(
                     imgs.clone(),
                     patch_size=PATCH_SIZE,
                     shuffle_ratio=MASK_RATIO
                 )
             elif masking_strategy == "random":
-                print("Using random strategy")
                 masked_imgs = random_mask(
                     imgs.clone(),
                     patch_size=PATCH_SIZE,
                     mask_ratio=MASK_RATIO
                 )
             elif masking_strategy == "combined-keypoints-jigsaw-random-mask":
-                print("Using combined-keypoints-jigsaw-random-mask strategy")
                 # Predict keypoints
                 with torch.no_grad():
                     keypoints_flat = model_keypoints(imgs_gray)
