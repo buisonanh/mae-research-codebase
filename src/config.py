@@ -6,7 +6,7 @@ import json
 DEVICE = torch.device('cpu')
 
 # Dataset parameters
-TARGET_SIZE = 96
+TARGET_SIZE = 224
 BATCH_SIZE = 32
 NUM_WORKERS = 4
 PRETRAIN_DATASET_NAME = "affectnet"  # Dataset for pretraining
@@ -19,10 +19,7 @@ NUM_CLASSES = {
 ENCODER_MODEL = "vit_base_p16"
 
 # Maskng strategy
-MASKING_STRATEGY = "random-jigsaw" # "keypoints-jigsaw", "random-jigsaw", "random"
-
-# Model parameters
-PATCH_SIZE = 16
+MASKING_STRATEGY = "keypoints-jigsaw" # "keypoints-jigsaw", "random-jigsaw", "random"
 
 # For keypoints-based jigsaw masking
 NUM_KEYPOINTS = 15

@@ -27,7 +27,7 @@ def train_keypoint_model(train_loader, val_loader, model, num_epochs):
         model.train()
         train_loss = 0
         
-        for images, keypoints in train_loader:
+        for images, keypoints in tqdm(train_loader):
             images, keypoints = images.to(DEVICE), keypoints.to(DEVICE)
             optimizer.zero_grad()
             outputs = model(images)
@@ -43,7 +43,7 @@ def train_keypoint_model(train_loader, val_loader, model, num_epochs):
         model.eval()
         val_loss = 0
         with torch.no_grad():
-            for images, keypoints in val_loader:
+            for images, keypoints in tqdm(val_loader):
                 images, keypoints = images.to(DEVICE), keypoints.to(DEVICE)
                 outputs = model(images)
                 loss = criterion(outputs, keypoints)

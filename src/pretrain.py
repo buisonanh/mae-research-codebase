@@ -6,8 +6,7 @@ import os
 import json
 
 from src.config import *
-from src.models.models_vit_mae import MaskedAutoencoderViT
-from src.models.keypoint_model import KeypointCNN
+from src.models.models_vit_mae import mae_vit_base_patch16, mae_vit_large_patch16, mae_vit_huge_patch14
 from src.data.dataset import create_pretrain_data_loaders
 from src.utils.train_keypoints import load_and_train_keypoints
 from src.utils.visualization import plot_loss_curve, save_reconstruction_samples, save_training_results, format_config_params
@@ -136,13 +135,14 @@ def main():
     train_loader, val_loader, test_loader = create_pretrain_data_loaders()
 
     # Instantiate MAE model
-    model = MaskedAutoencoderViT(
-        img_size=TARGET_SIZE,
-        patch_size=PATCH_SIZE,
-        embed_dim=768,
-        decoder_embed_dim=512,
-        masking_strategy=MASKING_STRATEGY
-    )
+    if ENCODER_MODEL == "vit_base_p16":
+        model = mae_vit_base_patch16()
+    elif ENCODER_MODEL == "vit_large_p16":
+        model = mae_vit_large_patch16()
+    elif ENCODER_MODEL == "vit_huge_p14":
+        model = mae_vit_huge_patch14()
+    else:
+        raise ValueError(f"Unknown encoder model: {ENCODER_MODEL}")
 
     print("Training MAE...")
     train_loss_values, val_loss_values = train_mae(
