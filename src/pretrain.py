@@ -9,7 +9,7 @@ import json
 from src.config import *
 from src.models.autoencoder import Autoencoder
 from src.data.dataset import create_pretrain_data_loaders
-from src.utils.masking import random_jigsaw_mask_keypoints, random_jigsaw_mask, random_mask, combined_keypoints_jigsaw_random_mask
+from src.utils.masking import keypoint_jigsaw_mask, random_jigsaw_mask, random_mask, combined_keypoints_jigsaw_random_mask
 from src.utils.visualization import plot_loss_curve, save_reconstruction_samples, save_training_results, format_config_params
 from src.utils.train_keypoints import load_and_train_keypoints
     
@@ -51,7 +51,7 @@ def train_autoencoder(train_loader, val_loader, test_loader, model_keypoints, mo
                     predicted_keypoints = keypoints_flat.view(-1, 15, 2)
                 
                 # Apply masking
-                masked_imgs = random_jigsaw_mask_keypoints(
+                masked_imgs = keypoint_jigsaw_mask(
                     imgs.clone(), 
                     predicted_keypoints, 
                     patch_size=PATCH_SIZE
@@ -126,7 +126,7 @@ def train_autoencoder(train_loader, val_loader, test_loader, model_keypoints, mo
                     predicted_keypoints = keypoints_flat.view(-1, 15, 2)
                     
                     # Apply masking
-                    masked_imgs = random_jigsaw_mask_keypoints(
+                    masked_imgs = keypoint_jigsaw_mask(
                         imgs.clone(), 
                         predicted_keypoints, 
                         patch_size=PATCH_SIZE
@@ -176,8 +176,10 @@ def train_autoencoder(train_loader, val_loader, test_loader, model_keypoints, mo
         # Save model if validation loss improved
         if val_loss < best_val_loss:
             best_val_loss = val_loss
-            torch.save(model.state_dict(), os.path.join(PRETRAIN_FOLDER, 'mae_checkpoints', 'best_model.pth'))
+            checkpoint_path = os.path.join(PRETRAIN_FOLDER, 'mae_checkpoints', 'best_model.pth')
+            torch.save(model.state_dict(), checkpoint_path)
             print(f'Epoch [{epoch+1}/{num_epochs}], Train Loss: {train_loss:.4f}, Val Loss: {val_loss:.4f} (Best)')
+            print(f"Best model saved at: {checkpoint_path}")
         else:
             print(f'Epoch [{epoch+1}/{num_epochs}], Train Loss: {train_loss:.4f}, Val Loss: {val_loss:.4f}')
         

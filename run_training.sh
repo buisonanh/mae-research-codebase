@@ -31,26 +31,40 @@ done
 # Run pretraining if not skipped
 if $PRETRAIN; then
     echo "Starting MAE pretraining"
-    python -m src.pretrain
-    
-    if [ $? -ne 0 ]; then
+    # Use tee to show output in terminal while capturing it
+    PRETRAIN_OUTPUT=$(python3 -m src.pretrain 2>&1 | tee /dev/tty)
+    PRETRAIN_STATUS=${PIPESTATUS[0]}
+
+    if [ $PRETRAIN_STATUS -ne 0 ]; then
         echo "Error: Pretraining failed!"
+        echo "Output from pretraining script:"
+        echo "$PRETRAIN_OUTPUT"
         exit 1
     fi
+
+    # Extract the checkpoint path from the output
+    CHECKPOINT_FROM_PRETRAIN=$(echo "$PRETRAIN_OUTPUT" | grep "Best model saved at:" | awk '{print $5}')
     echo "Pretraining completed successfully!"
 fi
 
 # Run classification if not skipped
 if $CLASSIFY; then
     echo "Starting classification"
+
+    # Prioritize user-provided checkpoint
     if [ -n "$CHECKPOINT" ]; then
-        echo "Using checkpoint: $CHECKPOINT"
-        python -m src.classify --checkpoint "$CHECKPOINT"
+        echo "Using user-provided checkpoint: $CHECKPOINT"
+        python3 -m src.classify --checkpoint "$CHECKPOINT"
+    # Otherwise, use the checkpoint from the pretraining step if it exists
+    elif [ -n "$CHECKPOINT_FROM_PRETRAIN" ]; then
+        echo "Using checkpoint from pretraining: $CHECKPOINT_FROM_PRETRAIN"
+        python3 -m src.classify --checkpoint "$CHECKPOINT_FROM_PRETRAIN"
+    # Otherwise, run without a specific checkpoint
     else
-        echo "No pretrain checkpoint provided. Using non-pretrained model."
-        python -m src.classify
+        echo "No checkpoint specified. Running classification without a pretrained model."
+        python3 -m src.classify
     fi
-    
+
     if [ $? -ne 0 ]; then
         echo "Error: Classification failed!"
         exit 1

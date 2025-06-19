@@ -2,7 +2,7 @@ import torch
 import numpy as np # Retaining for other functions, though not used in the new one directly
 
 from torch import nn
-from src.config import PATCH_SIZE # Used as default in random_jigsaw_mask_keypoints
+from src.config import PATCH_SIZE # Used as default in keypoint_jigsaw_mask
 
 
 class Patchify(nn.Module):
@@ -24,7 +24,7 @@ class Patchify(nn.Module):
         return a
 
 
-def random_jigsaw_mask_keypoints(image, keypoints, patch_size=PATCH_SIZE):
+def keypoint_jigsaw_mask(image, keypoints, patch_size=PATCH_SIZE):
     # If keypoints is 2D, add a batch dimension
     if keypoints.ndim == 2:
         keypoints = keypoints.unsqueeze(0)
@@ -228,8 +228,8 @@ def combined_keypoints_jigsaw_random_mask(image, keypoints, patch_size, random_m
         batch_keypoint_patch_indices_sets.append(current_kp_patch_indices)
 
     # --- Part 2: Apply keypoint jigsaw masking ---
-    # random_jigsaw_mask_keypoints returns a new tensor with shuffled patches.
-    jigsawed_image = random_jigsaw_mask_keypoints(image.clone(), keypoints, patch_size=patch_size)
+    # keypoint_jigsaw_mask returns a new tensor with shuffled patches.
+    jigsawed_image = keypoint_jigsaw_mask(image.clone(), keypoints, patch_size=patch_size)
 
     # --- Part 3: Apply random masking to non-keypoint patches on the jigsawed_image ---
     output_image = jigsawed_image.clone() # Work on a copy of the jigsawed image

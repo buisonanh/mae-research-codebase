@@ -15,3 +15,5 @@ datasets/
 checkpoints*/
 results*/
 run_id.json
+
+*.zip

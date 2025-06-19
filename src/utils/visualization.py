@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from functools import partial
-from src.utils.masking import random_jigsaw_mask_keypoints, random_mask, random_jigsaw_mask, combined_keypoints_jigsaw_random_mask
+from src.utils.masking import keypoint_jigsaw_mask, random_mask, random_jigsaw_mask, combined_keypoints_jigsaw_random_mask
 from src.config import MASK_RATIO, NUM_KEYPOINTS
 import os
 
@@ -83,7 +83,7 @@ def save_reconstruction_samples(model, model_keypoints, test_loader, device, sav
 
         # Apply masking based on the strategy
         if masking_strategy == "keypoints-jigsaw":
-            masked_img = random_jigsaw_mask_keypoints(
+            masked_img = keypoint_jigsaw_mask(
                 data.clone(),
                 keypoints=predicted_keypoints,
                 patch_size=patch_size

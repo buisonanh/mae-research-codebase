@@ -1,4 +1,4 @@
-from .masking import random_jigsaw_mask_keypoints, random_mask, random_jigsaw_mask
+from .masking import keypoint_jigsaw_mask, random_mask, random_jigsaw_mask
 from .visualization import (
     display_image_with_keypoints,
     plot_loss_curve,
@@ -6,7 +6,7 @@ from .visualization import (
 )
 
 __all__ = [
-    'random_jigsaw_mask_keypoints',
+    'keypoint_jigsaw_mask',
     'random_mask',
     'random_jigsaw_mask',
     'display_image_with_keypoints',
