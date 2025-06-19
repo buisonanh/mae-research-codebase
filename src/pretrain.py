@@ -31,6 +31,8 @@ def train_mae(train_loader, val_loader, test_loader, keypoint_model, model, num_
         for imgs, _ in train_progress:
             imgs = imgs.to(DEVICE)
             imgs_gray = imgs.mean(dim=1, keepdim=True)
+            if imgs_gray.shape[1] == 1:
+                imgs_gray = imgs_gray.repeat(1, 3, 1, 1)
 
             keypoints = None
             if masking_strategy == "keypoints-jigsaw":
@@ -71,6 +73,8 @@ def train_mae(train_loader, val_loader, test_loader, keypoint_model, model, num_
             for imgs, _ in val_progress:
                 imgs = imgs.to(DEVICE)
                 imgs_gray = imgs.mean(dim=1, keepdim=True)
+                if imgs_gray.shape[1] == 1:
+                    imgs_gray = imgs_gray.repeat(1, 3, 1, 1)
 
                 keypoints = None
                 if masking_strategy == "keypoints-jigsaw":
