@@ -7,7 +7,7 @@ DEVICE = torch.device('cpu')
 
 # Dataset parameters
 TARGET_SIZE = 224
-BATCH_SIZE = 32
+BATCH_SIZE = 64
 NUM_WORKERS = 4
 PRETRAIN_DATASET_NAME = "affectnet"  # Dataset for pretraining
 CLASSIFY_DATASET_NAME = "rafdb"  # Dataset for classification
@@ -26,6 +26,9 @@ NUM_KEYPOINTS = 15
 
 # For random jigsaw masking and jigsaw masking only
 MASK_RATIO = 0.75
+
+# For visualization
+PATCH_SIZE = 16
 
 # Training parameters
 AUTOENCODER_NUM_EPOCHS = 1

@@ -76,8 +76,7 @@ def save_reconstruction_samples(model, model_keypoints, test_loader, device, sav
         if masking_strategy in ["keypoints-jigsaw", "combined-keypoints-jigsaw-random-mask"]:
             if model_keypoints is None:
                 raise ValueError("Keypoint model is required for this masking strategy but was not provided.")
-            data_gray = data.mean(dim=1, keepdim=True)
-            keypoints_flat = model_keypoints(data_gray)
+            keypoints_flat = model_keypoints(data)
             predicted_keypoints = keypoints_flat.view(-1, NUM_KEYPOINTS, 2)
 
         # Apply masking based on the strategy

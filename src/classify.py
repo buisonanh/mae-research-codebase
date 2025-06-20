@@ -23,17 +23,26 @@ def create_model(weights_path=None, num_classes=None):
     if num_classes is None:
         num_classes = NUM_CLASSES[CLASSIFY_DATASET_NAME]
 
+    if ENCODER_MODEL == "vit_base_p16":
+        encoder_model = "vit_base_patch16_224"
+    elif ENCODER_MODEL == "vit_large_p16":
+        encoder_model = "vit_large_patch16_224"
+    elif ENCODER_MODEL == "vit_huge_p14":
+        encoder_model = "vit_huge_patch14_224"
+    else:
+        raise ValueError(f"Unknown encoder model: {ENCODER_MODEL}")
+
     if weights_path is None:
         print(f"Loading PyTorch non-pretrained {ENCODER_MODEL} with {num_classes} classes.")
         model = timm.create_model(
-            model_name=ENCODER_MODEL,
+            model_name=encoder_model,
             pretrained=False,
             num_classes=num_classes
         )
     else:
         print(f"Creating base model {ENCODER_MODEL} for feature extraction (loading from path: {weights_path})")
         feature_extractor = timm.create_model(
-            model_name=ENCODER_MODEL,
+            model_name=encoder_model,
             pretrained=False,
             num_classes=0,
             global_pool=''
@@ -53,10 +62,10 @@ def create_model(weights_path=None, num_classes=None):
         try:
             in_features = feature_extractor.num_features
         except AttributeError:
-            temp_model_for_features = timm.create_model(ENCODER_MODEL, pretrained=False, num_classes=1)
+            temp_model_for_features = timm.create_model(encoder_model, pretrained=False, num_classes=1)
             in_features = temp_model_for_features.num_features
             del temp_model_for_features
-            print(f"Inferred in_features as {in_features} for {ENCODER_MODEL}.")
+            print(f"Inferred in_features as {in_features} for {encoder_model}.")
         model = nn.Sequential(
             feature_extractor,
             nn.AdaptiveAvgPool2d((1, 1)),

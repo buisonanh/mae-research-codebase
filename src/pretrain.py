@@ -184,5 +184,9 @@ def main():
         masking_strategy=MASKING_STRATEGY
     )
 
+    # Print the path to the best model for the runner script
+    checkpoint_path = os.path.join(PRETRAIN_FOLDER, 'mae_checkpoints', 'best_model.pth')
+    print(f"Best model saved at: {checkpoint_path}")
+
 if __name__ == "__main__":
     main()
