@@ -26,7 +26,9 @@ def load_and_preprocess_dataframe(csv_path):
 
     # Convert 'Image' column from space-separated string to NumPy array
     def string_to_array(img_str):
-        return np.array(img_str.split(), dtype=np.float32).reshape(config.TARGET_SIZE, config.TARGET_SIZE)
+        pixels = np.array(img_str.split(), dtype=np.float32)
+        side = int(np.sqrt(pixels.shape[0]))
+        return pixels.reshape(side, side)
 
     if isinstance(dataframe['Image'].iloc[0], str):
         print("Converting 'Image' column from string to NumPy array...")

@@ -179,7 +179,6 @@ def main():
         test_loader,
         DEVICE,
         os.path.join(PRETRAIN_FOLDER, 'reconstruction_samples.png'),
-        PATCH_SIZE,
         num_samples=7,
         masking_strategy=MASKING_STRATEGY
     )

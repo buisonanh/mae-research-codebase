@@ -44,118 +44,111 @@ def plot_loss_curve(train_loss_values, val_loss_values, save_path=None):
         plt.savefig(save_path, dpi=300)
     plt.show()
 
-def save_reconstruction_samples(model, model_keypoints, test_loader, device, save_path, patch_size, num_samples=7, masking_strategy="random-jigsaw"):
-    """Save visualization of reconstruction samples.
-    
-    Args:
-        model: The trained autoencoder model
-        model_keypoints: The trained keypoint detection model (can be None if not using keypoints)
-        test_loader: DataLoader for test set
-        device: Device to run inference on
-        save_path: Path to save the visualization
-        patch_size: Patch size for masking
-        num_samples: Number of samples to visualize (default: 7)
+# --- Masking functions are methods on MaskedAutoencoderViT ---
+# Masking is performed via model.patchify, model.random_masking, model.random_jigsaw_masking, model.keypoint_jigsaw_masking, etc.
+
+
+def save_reconstruction_samples(model, model_keypoints, test_loader, device, save_path, num_samples=7, masking_strategy="random-jigsaw"):
     """
-    # Put models in eval mode
+    Save visualization of reconstruction samples by using the model's forward pass.
+
+    Args:
+        model: The trained autoencoder model (MaskedAutoencoderViT).
+        model_keypoints: The trained keypoint detection model (can be None).
+        test_loader: DataLoader for the test set.
+        device: Device to run inference on.
+        save_path: Path to save the visualization.
+        num_samples: Number of samples to visualize.
+        masking_strategy: The masking strategy used during training.
+    """
     model.eval()
     if model_keypoints is not None:
         model_keypoints.eval()
 
-    # Get one batch from test set
-    data_iter = iter(test_loader)
-    data, _ = next(data_iter)  # Ignore labels since they might be keypoints
-    
-    # Get image names if available
-    image_names = [name.split('/')[-1] for name, _ in test_loader.dataset.samples] if hasattr(test_loader.dataset, 'samples') else None
-    
+    # Get one batch from the test set
+    try:
+        batch = next(iter(test_loader))
+    except StopIteration:
+        raise RuntimeError("Test loader is empty!")
+
+    # Unpack data and move to device
+    if isinstance(batch, (list, tuple)) and len(batch) == 2:
+        data, keypoints_or_labels = batch
+    else:
+        data = batch
+        keypoints_or_labels = None
     data = data.to(device)
 
-    with torch.no_grad():
-        # Predict keypoints if needed for the strategy
-        predicted_keypoints = None
-        if masking_strategy in ["keypoints-jigsaw", "combined-keypoints-jigsaw-random-mask"]:
-            if model_keypoints is None:
-                raise ValueError("Keypoint model is required for this masking strategy but was not provided.")
-            keypoints_flat = model_keypoints(data)
-            predicted_keypoints = keypoints_flat.view(-1, NUM_KEYPOINTS, 2)
-
-        # Apply masking based on the strategy
-        if masking_strategy == "keypoints-jigsaw":
-            masked_img = random_jigsaw_mask_keypoints(
-                data.clone(),
-                keypoints=predicted_keypoints,
-                patch_size=patch_size
-            )
-        elif masking_strategy == "combined-keypoints-jigsaw-random-mask":
-            masked_img = combined_keypoints_jigsaw_random_mask(
-                data.clone(),
-                keypoints=predicted_keypoints,
-                patch_size=patch_size,
-                random_mask_ratio=MASK_RATIO
-            )
-        elif masking_strategy == "random":
-            masked_img = random_mask(
-                data.clone(),
-                patch_size=patch_size,
-                mask_ratio=MASK_RATIO
-            )
-        elif masking_strategy == "random-jigsaw":
-            masked_img = random_jigsaw_mask(
-                data.clone(),
-                patch_size=patch_size,
-                shuffle_ratio=MASK_RATIO
-            )
+    # Get keypoints if needed for the masking strategy
+    predicted_keypoints = None
+    if masking_strategy == "keypoints-jigsaw":
+        if model_keypoints is not None:
+            predicted_keypoints = model_keypoints(data).view(-1, NUM_KEYPOINTS, 2)
+        elif keypoints_or_labels is not None and keypoints_or_labels.shape[-1] == NUM_KEYPOINTS * 2:
+            predicted_keypoints = keypoints_or_labels.view(-1, NUM_KEYPOINTS, 2).to(device)
         else:
-            raise ValueError(f"Unknown masking strategy for visualization: {masking_strategy}")
-            
-        # Convert to 3 channels for model input if needed
-        if masked_img.shape[1] == 1:
-            masked_img = masked_img.repeat(1, 3, 1, 1)
+            raise ValueError("Keypoints required for keypoint-jigsaw strategy but none provided.")
 
-        # 4) Generate reconstruction
-        output = model(masked_img)
+    # --- Model Forward Pass ---
+    with torch.no_grad():
+        # The model's forward pass returns loss, prediction, and mask
+        loss, pred, mask = model(data, mask_ratio=MASK_RATIO, keypoints=predicted_keypoints)
+
+    # --- Visualization ---
+    recon_img = model.unpatchify(pred)
+
+    # Create masked/shuffled image for visualization
+    if masking_strategy in ["keypoints-jigsaw", "random-jigsaw"]:
+        # For jigsaw, the input is shuffled. We create a representative shuffled image for visualization.
+        # Note: This shuffle is random and may not be the exact one used in the forward pass.
+        patches = model.patchify(data)
+        if masking_strategy == "keypoints-jigsaw":
+            shuffled_patches, _, _ = model.keypoint_jigsaw_masking(patches, predicted_keypoints)
+        else:  # random-jigsaw
+            shuffled_patches, _, _ = model.random_jigsaw_masking(patches, MASK_RATIO)
+        masked_img = model.unpatchify(shuffled_patches)
+        masked_title = "Shuffled Image"
+    else:  # Default to random-masking visualization
+        mask = mask.unsqueeze(-1).repeat(1, 1, model.patch_embed.patch_size[0]**2 * 3)
+        masked_patches = model.patchify(data) * (1 - mask)  # Apply mask
+        masked_img = model.unpatchify(masked_patches)
+        masked_title = "Masked Image"
 
     # Move tensors to CPU for plotting
-    data_cpu = data.cpu().numpy()
-    masked_cpu = masked_img.cpu().numpy()
-    recon_cpu = output.cpu().numpy()
+    data_cpu = data.cpu()
+    recon_cpu = recon_img.cpu()
+    masked_cpu = masked_img.cpu()
 
-    # Plot samples
-    num_show = min(num_samples, data_cpu.shape[0])
+    # Plotting
+    num_show = min(num_samples, data.shape[0])
     fig, ax = plt.subplots(3, num_show, figsize=(15, 6))
 
     for i in range(num_show):
-        img_name = image_names[i] if image_names and i < len(image_names) else f"Image {i}"
-
-        # Original image with keypoints
-        orig_2d = data_cpu[i, 0, :, :]
-        ax[0, i].imshow(orig_2d, cmap='gray')
-        ax[0, i].set_title(f"Original\n{img_name}", fontsize=8)
+        # Original Image
+        orig_display = data_cpu[i].permute(1, 2, 0).numpy()
+        ax[0, i].imshow(orig_display)
+        ax[0, i].set_title(f"Original Image {i+1}")
         ax[0, i].axis('off')
 
-        if model_keypoints is not None:
-            # Plot keypoints
-            kps = predicted_keypoints[i].cpu().numpy()
-            H_, W_ = data[i].shape[1], data[i].shape[2]
-            kps[:, 0] *= W_
-            kps[:, 1] *= H_
-            ax[0, i].scatter(kps[:, 0], kps[:, 1], s=10, c='red', marker='o')
-
-        # Masked image
-        masked_2d = masked_cpu[i, 0, :, :]
-        ax[1, i].imshow(masked_2d, cmap='gray')
-        ax[1, i].set_title(f"Masked\n{img_name}", fontsize=8)
+        # Masked/Shuffled Image
+        masked_display = masked_cpu[i].permute(1, 2, 0).numpy()
+        ax[1, i].imshow(masked_display)
+        ax[1, i].set_title(f"{masked_title} {i+1}")
         ax[1, i].axis('off')
 
-        # Reconstructed image
-        recon_3d = recon_cpu[i].transpose(1, 2, 0)
-        ax[2, i].imshow(recon_3d)
-        ax[2, i].set_title(f"Reconstructed\n{img_name}", fontsize=8)
+        # Reconstructed Image
+        recon_display = recon_cpu[i].permute(1, 2, 0).numpy()
+        ax[2, i].imshow(recon_display)
+        ax[2, i].set_title(f"Reconstructed Image {i+1}")
         ax[2, i].axis('off')
 
     plt.tight_layout()
+    dir_name = os.path.dirname(save_path)
+    if dir_name:
+        os.makedirs(dir_name, exist_ok=True)
     plt.savefig(save_path, dpi=300)
     plt.close()
+    print(f"Reconstruction samples saved to {save_path}")
 
 def format_config_params():
     """Format all configuration parameters as a string."""
@@ -241,3 +234,16 @@ def save_training_results(train_loss_values, val_loss_values, config, save_path)
         f.write("-----------------------\n")
         for epoch, loss in enumerate(val_loss_values):
             f.write(f"Epoch {epoch+1}: {loss:.6f}\n")
+
+if __name__ == '__main__':
+    # Example usage: Print the formatted configuration parameters
+    config_string = format_config_params()
+    print(config_string)
+
+    # To test other functions, you would need to provide appropriate data,
+    # for example, dummy loss values for plot_loss_curve:
+    #
+    # train_losses = [0.5, 0.4, 0.3, 0.2, 0.1]
+    # val_losses = [0.6, 0.5, 0.4, 0.3, 0.2]
+    # plot_loss_curve(train_losses, val_losses, save_path="sample_loss_curve.png")
+    # print("Sample loss curve saved to sample_loss_curve.png")

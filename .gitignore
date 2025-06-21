@@ -16,3 +16,5 @@ checkpoints*/
 results*/
 run_id.json
 *.pth
+*.pt
+*.zip

@@ -12,6 +12,7 @@ from sklearn.metrics import confusion_matrix
 import os
 from torch.utils.data import random_split
 import json
+from src.models.vit_classifier_head import ViTClassificationHead
 
 from src.config import (
     DEVICE, TARGET_SIZE, BATCH_SIZE, NUM_WORKERS, CLASSIFY_DATASET_NAME,
@@ -65,12 +66,9 @@ def create_model(weights_path=None, num_classes=None):
             temp_model_for_features = timm.create_model(encoder_model, pretrained=False, num_classes=1)
             in_features = temp_model_for_features.num_features
             del temp_model_for_features
-            print(f"Inferred in_features as {in_features} for {encoder_model}.")
         model = nn.Sequential(
             feature_extractor,
-            nn.AdaptiveAvgPool2d((1, 1)),
-            nn.Flatten(),
-            nn.Linear(in_features, num_classes)
+            ViTClassificationHead(in_features, num_classes)
         )
     return model
 

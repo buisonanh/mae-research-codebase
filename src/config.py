@@ -3,11 +3,11 @@ import os
 import json
 
 # Device configuration
-DEVICE = torch.device('cpu')
+DEVICE = torch.device('cuda:1')
 
 # Dataset parameters
 TARGET_SIZE = 224
-BATCH_SIZE = 64
+BATCH_SIZE = 128
 NUM_WORKERS = 4
 PRETRAIN_DATASET_NAME = "affectnet"  # Dataset for pretraining
 CLASSIFY_DATASET_NAME = "rafdb"  # Dataset for classification
@@ -31,9 +31,9 @@ MASK_RATIO = 0.75
 PATCH_SIZE = 16
 
 # Training parameters
-AUTOENCODER_NUM_EPOCHS = 1
-CLASSIFIER_NUM_EPOCHS = 1
-KEYPOINT_NUM_EPOCHS = 1
+AUTOENCODER_NUM_EPOCHS = 20
+CLASSIFIER_NUM_EPOCHS = 50
+KEYPOINT_NUM_EPOCHS = 20
 
 LEARNING_RATE = 0.001
 CLASSIFIER_LEARNING_RATE = 0.001
@@ -48,14 +48,14 @@ STD = [0.5, 0.5, 0.5]
 
 # Dataset paths
 DATASET_PATHS = {
-    "rafdb": "datasets/raf-db-dataset/DATASET/train",
+    "rafdb": "datasets/raf-db-dataset/DATASET/",
     "affectnet": "datasets/affectnet/AffectNet/train",
     "keypoints": "datasets/keypoints/training_data/training.csv"
 }
 
 # Model save paths
 
-SAVE_PATH = f"results_{ENCODER_MODEL}_{PRETRAIN_DATASET_NAME}_{CLASSIFY_DATASET_NAME}_{MASKING_STRATEGY}_mr{MASK_RATIO}_lr{LEARNING_RATE}_mean{MEAN}_std{STD}"
+SAVE_PATH = f"results_{ENCODER_MODEL}_{PRETRAIN_DATASET_NAME}_{CLASSIFY_DATASET_NAME}_{MASKING_STRATEGY}_mr{MASK_RATIO}_lr{LEARNING_RATE}"
 
 PRETRAIN_FOLDER = os.path.join(SAVE_PATH, f'pretrain_checkpoints')
 CLASSIFICATION_FOLDER = os.path.join(SAVE_PATH, f'classification_checkpoints')
