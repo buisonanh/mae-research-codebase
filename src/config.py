@@ -30,7 +30,7 @@ PATCH_SIZE = int(os.environ.get('PATCH_SIZE', 16))
 NUM_KEYPOINTS = int(os.environ.get('NUM_KEYPOINTS', 15))
 
 # For random jigsaw masking and jigsaw masking only
-MASK_RATIO = float(os.environ.get('MASK_RATIO', 0.75))
+MASK_RATIO = float(os.environ.get('MASK_RATIO', 0.4))
 
 # Training parameters
 AUTOENCODER_NUM_EPOCHS = int(os.environ.get('AUTOENCODER_NUM_EPOCHS', 50))
