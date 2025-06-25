@@ -215,6 +215,13 @@ def train_model(model, train_loader, val_loader, num_epochs=CLASSIFIER_NUM_EPOCH
                 data = json.load(f)
         else:
             data = []
+        metrics_dict = {
+            'epoch': epoch + 1,
+            'train_loss': epoch_train_loss,
+            'train_acc': epoch_train_acc,
+            'val_loss': epoch_val_loss,
+            'val_acc': epoch_val_acc
+        }
         data.append(metrics_dict)
         with open(results_file, 'w') as f:
             json.dump(data, f, indent=4)
