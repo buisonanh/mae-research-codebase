@@ -35,11 +35,7 @@ def train_mae(train_loader, val_loader, test_loader, keypoint_model, model, num_
                 imgs_gray = imgs_gray.repeat(1, 3, 1, 1)
 
             keypoints = None
-            if masking_strategy == "keypoints-jigsaw":
-                with torch.no_grad():
-                    keypoints_flat = keypoint_model(imgs_gray)
-                    keypoints = keypoints_flat.view(imgs.shape[0], NUM_KEYPOINTS, 2)
-            elif masking_strategy == "combined-keypoints-jigsaw-random-mask":
+            if masking_strategy in ["keypoints-jigsaw", "keypoints-grouped-jigsaw", "combined-keypoints-jigsaw-random-mask"]:
                 with torch.no_grad():
                     keypoints_flat = keypoint_model(imgs_gray)
                     keypoints = keypoints_flat.view(imgs.shape[0], NUM_KEYPOINTS, 2)
@@ -50,7 +46,9 @@ def train_mae(train_loader, val_loader, test_loader, keypoint_model, model, num_
             elif masking_strategy == "random-jigsaw":
                 loss, _, _ = model(imgs, mask_ratio=0.0, shuffle_ratio=MASK_RATIO)  # No masking, only shuffle
             elif masking_strategy == "keypoints-jigsaw":
-                loss, _, _ = model(imgs, mask_ratio=0.0, shuffle_ratio=0.0, keypoints=keypoints)
+                loss, _, _ = model(imgs, mask_ratio=0.0, shuffle_ratio=MASK_RATIO, keypoints=keypoints)
+            elif masking_strategy == "keypoints-grouped-jigsaw":
+                loss, _, _ = model(imgs, mask_ratio=0.0, shuffle_ratio=MASK_RATIO, keypoints=keypoints)
             elif masking_strategy == "combined-keypoints-jigsaw-random-mask":
                 loss, _, _ = model(imgs, mask_ratio=MASK_RATIO, shuffle_ratio=0.0, keypoints=keypoints)
             else:
@@ -77,10 +75,7 @@ def train_mae(train_loader, val_loader, test_loader, keypoint_model, model, num_
                     imgs_gray = imgs_gray.repeat(1, 3, 1, 1)
 
                 keypoints = None
-                if masking_strategy == "keypoints-jigsaw":
-                    keypoints_flat = keypoint_model(imgs_gray)
-                    keypoints = keypoints_flat.view(imgs.shape[0], NUM_KEYPOINTS, 2)
-                elif masking_strategy == "combined-keypoints-jigsaw-random-mask":
+                if masking_strategy in ["keypoints-jigsaw", "keypoints-grouped-jigsaw", "combined-keypoints-jigsaw-random-mask"]:
                     keypoints_flat = keypoint_model(imgs_gray)
                     keypoints = keypoints_flat.view(imgs.shape[0], NUM_KEYPOINTS, 2)
 
@@ -89,7 +84,9 @@ def train_mae(train_loader, val_loader, test_loader, keypoint_model, model, num_
                 elif masking_strategy == "random-jigsaw":
                     loss, _, _ = model(imgs, mask_ratio=0.0, shuffle_ratio=MASK_RATIO)
                 elif masking_strategy == "keypoints-jigsaw":
-                    loss, _, _ = model(imgs, mask_ratio=0.0, shuffle_ratio=0.0, keypoints=keypoints)
+                    loss, _, _ = model(imgs, mask_ratio=0.0, shuffle_ratio=MASK_RATIO, keypoints=keypoints)
+                elif masking_strategy == "keypoints-grouped-jigsaw":
+                    loss, _, _ = model(imgs, mask_ratio=0.0, shuffle_ratio=MASK_RATIO, keypoints=keypoints)
                 elif masking_strategy == "combined-keypoints-jigsaw-random-mask":
                     loss, _, _ = model(imgs, mask_ratio=MASK_RATIO, shuffle_ratio=0.0, keypoints=keypoints)
 
@@ -127,7 +124,7 @@ def main():
     print(f"Start pretraining with {MASKING_STRATEGY} strategy on {PRETRAIN_DATASET_NAME} dataset.")
 
     # Load data and train keypoint model if needed
-    if MASKING_STRATEGY in ["keypoints-jigsaw", "combined-keypoints-jigsaw-random-mask"]:
+    if MASKING_STRATEGY in ["keypoints-jigsaw", "keypoints-grouped-jigsaw", "combined-keypoints-jigsaw-random-mask"]:
         os.makedirs(os.path.join(PRETRAIN_FOLDER, 'keypoints_checkpoint'), exist_ok=True)
         print("Loading keypoints dataset and training keypoint model...")
         keypoint_model = load_and_train_keypoints()

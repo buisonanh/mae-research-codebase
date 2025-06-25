@@ -20,56 +20,45 @@ from src.config import (
     CLASSIFIER_NUM_EPOCHS, CLASSIFIER_LEARNING_RATE, PRETRAIN_FOLDER, CLASSIFICATION_FOLDER, ENCODER_MODEL
 )
 
-def create_model(weights_path=None, num_classes=None):
+def create_model(weights_path=None, num_classes=None, checkpoint_path=None):
     if num_classes is None:
         num_classes = NUM_CLASSES[CLASSIFY_DATASET_NAME]
 
-    if ENCODER_MODEL == "vit_base_p16":
-        encoder_model = "vit_base_patch16_224"
-    elif ENCODER_MODEL == "vit_large_p16":
-        encoder_model = "vit_large_patch16_224"
-    elif ENCODER_MODEL == "vit_huge_p14":
-        encoder_model = "vit_huge_patch14_224"
+    if ENCODER_MODEL == 'vit_base_patch16':
+        encoder_model = 'vit_base_patch16_224'
+    elif ENCODER_MODEL == 'deit_base_distilled_patch16':
+        encoder_model = 'deit_base_distilled_patch16_224'
     else:
         raise ValueError(f"Unknown encoder model: {ENCODER_MODEL}")
 
-    if weights_path is None:
-        print(f"Loading PyTorch non-pretrained {ENCODER_MODEL} with {num_classes} classes.")
-        model = timm.create_model(
-            model_name=encoder_model,
-            pretrained=False,
-            num_classes=num_classes
-        )
+    model = timm.create_model(
+        model_name=encoder_model,
+        pretrained=False,
+        num_classes=num_classes
+    )
+
+    if checkpoint_path and os.path.exists(checkpoint_path):
+        print(f"Loading model weights from checkpoint {checkpoint_path}")
+        checkpoint = torch.load(checkpoint_path)
+        model.load_state_dict(checkpoint['model_state_dict'])
+    elif weights_path:
+        if not os.path.exists(weights_path):
+            raise FileNotFoundError(f"Weights file not found at {weights_path}")
+        print(f"Loading weights from {weights_path}")
+        state_dict = torch.load(weights_path)
+        if 'model' in state_dict:
+            state_dict = state_dict['model']
+        
+        state_dict = {k.replace('module.', ''): v for k, v in state_dict.items()}
+        state_dict = {k.replace('backbone.', ''): v for k, v in state_dict.items()}
+
+        model_dict = model.state_dict()
+        pretrained_dict = {k: v for k, v in state_dict.items() if k in model_dict and v.size() == model_dict[k].size()}
+        model_dict.update(pretrained_dict)
+        model.load_state_dict(model_dict)
     else:
-        print(f"Creating base model {ENCODER_MODEL} for feature extraction (loading from path: {weights_path})")
-        feature_extractor = timm.create_model(
-            model_name=encoder_model,
-            pretrained=False,
-            num_classes=0,
-            global_pool=''
-        )
-        print(f"Loading pretrained weights from checkpoint: {weights_path}")
-        weights = torch.load(weights_path, map_location=DEVICE)
-        if any(k.startswith("encoder.") for k in weights.keys()):
-            print("Detected MAE-style encoder weights (prefixed with 'encoder.'). Extracting and loading.")
-            encoder_weights = {k.replace("encoder.", ""): v for k, v in weights.items() if k.startswith("encoder.")}
-            feature_extractor.load_state_dict(encoder_weights, strict=False)
-        elif 'model' in weights:
-            feature_extractor.load_state_dict(weights['model'], strict=False)
-        elif 'state_dict' in weights:
-            feature_extractor.load_state_dict(weights['state_dict'], strict=False)
-        else:
-            feature_extractor.load_state_dict(weights, strict=False)
-        try:
-            in_features = feature_extractor.num_features
-        except AttributeError:
-            temp_model_for_features = timm.create_model(encoder_model, pretrained=False, num_classes=1)
-            in_features = temp_model_for_features.num_features
-            del temp_model_for_features
-        model = nn.Sequential(
-            feature_extractor,
-            ViTClassificationHead(in_features, num_classes)
-        )
+        print(f"Loading PyTorch non-pretrained {ENCODER_MODEL} with {num_classes} classes.")
+
     return model
 
 def get_data_transforms():
@@ -136,19 +125,33 @@ def create_data_loaders():
     )
     return train_loader, val_loader, test_loader
 
-def train_model(model, train_loader, val_loader, num_epochs=CLASSIFIER_NUM_EPOCHS):
+def train_model(model, train_loader, val_loader, num_epochs=CLASSIFIER_NUM_EPOCHS, checkpoint_path=None):
     model = model.to(DEVICE)
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.Adam(model.parameters(), lr=CLASSIFIER_LEARNING_RATE)
+    optimizer = optim.AdamW(model.parameters(), lr=CLASSIFIER_LEARNING_RATE, betas=(0.9, 0.95))
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(
         optimizer, mode='min', factor=0.1, patience=5, verbose=True
     )
     train_losses, train_accuracies = [], []
     val_losses, val_accuracies = [], []
     best_val_loss = float('inf')
+    start_epoch = 0
+
+    if checkpoint_path and os.path.exists(checkpoint_path):
+        print(f"Resuming from checkpoint: {checkpoint_path}")
+        checkpoint = torch.load(checkpoint_path)
+        start_epoch = checkpoint['epoch'] + 1
+        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+        best_val_loss = checkpoint['best_val_loss']
+        train_losses = checkpoint.get('train_losses', [])
+        train_accuracies = checkpoint.get('train_accuracies', [])
+        val_losses = checkpoint.get('val_losses', [])
+        val_accuracies = checkpoint.get('val_accuracies', [])
+
     classification_dir = CLASSIFICATION_FOLDER
     os.makedirs(classification_dir, exist_ok=True)
-    for epoch in range(num_epochs):
+    for epoch in range(start_epoch, num_epochs):
         model.train()
         train_loss, train_correct, train_total = 0.0, 0, 0
         train_loader_tqdm = tqdm(train_loader, desc=f"Training Epoch {epoch+1}/{num_epochs}")
@@ -188,15 +191,22 @@ def train_model(model, train_loader, val_loader, num_epochs=CLASSIFIER_NUM_EPOCH
         print(f"Val Loss: {epoch_val_loss:.4f}, Val Acc: {epoch_val_acc:.2f}%")
         if epoch_val_loss < best_val_loss:
             best_val_loss = epoch_val_loss
-            torch.save(model.state_dict(), os.path.join(classification_dir, 'best_model.pth'))
+            torch.save(model.state_dict(), os.path.join(classification_dir, 'best_classifier.pth'))
             print("Best model saved!")
-        metrics_dict = {
-            'epoch': epoch + 1,
-            'train_loss': epoch_train_loss,
-            'train_acc': epoch_train_acc,
-            'val_loss': epoch_val_loss,
-            'val_acc': epoch_val_acc
+
+        checkpoint = {
+            'epoch': epoch,
+            'model_state_dict': model.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict(),
+            'scheduler_state_dict': scheduler.state_dict(),
+            'best_val_loss': best_val_loss,
+            'train_losses': train_losses,
+            'train_accuracies': train_accuracies,
+            'val_losses': val_losses,
+            'val_accuracies': val_accuracies,
         }
+        torch.save(checkpoint, os.path.join(classification_dir, 'classifier_checkpoint.pth'))
+
         results_file = os.path.join(classification_dir, 'training_metrics.json')
         if os.path.exists(results_file):
             with open(results_file, 'r') as f:
@@ -290,10 +300,13 @@ def main():
     classification_dir = CLASSIFICATION_FOLDER
     os.makedirs(classification_dir, exist_ok=True)
     os.makedirs(os.path.join(classification_dir, 'metrics_plots'), exist_ok=True)
-    model = create_model(weights_path=args.checkpoint)
+
+    checkpoint_path = os.path.join(classification_dir, 'classifier_checkpoint.pth')
+    model = create_model(weights_path=args.checkpoint, checkpoint_path=checkpoint_path)
+
     train_loader, val_loader, test_loader = create_data_loaders()
     print("Training classifier...")
-    metrics = train_model(model, train_loader, val_loader)
+    metrics = train_model(model, train_loader, val_loader, checkpoint_path=checkpoint_path)
     train_losses, train_accuracies, val_losses, val_accuracies = metrics
     plot_metrics(train_losses, val_losses, train_accuracies, val_accuracies)
     print("\nEvaluating on test set...")

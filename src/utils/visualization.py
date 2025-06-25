@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from functools import partial
-from src.config import MASK_RATIO, NUM_KEYPOINTS
+from src.config import MASK_RATIO, NUM_KEYPOINTS, MASKING_STRATEGY
 import os
 
 def display_image_with_keypoints(image_path, keypoints):
@@ -81,29 +81,33 @@ def save_reconstruction_samples(model, model_keypoints, test_loader, device, sav
 
     # Get keypoints if needed for the masking strategy
     predicted_keypoints = None
-    if masking_strategy == "keypoints-jigsaw":
+    if masking_strategy in ["keypoints-jigsaw", "keypoints-grouped-jigsaw", "combined-keypoints-jigsaw-random-mask"]:
         if model_keypoints is not None:
-            predicted_keypoints = model_keypoints(data).view(-1, NUM_KEYPOINTS, 2)
-        elif keypoints_or_labels is not None and keypoints_or_labels.shape[-1] == NUM_KEYPOINTS * 2:
-            predicted_keypoints = keypoints_or_labels.view(-1, NUM_KEYPOINTS, 2).to(device)
-        else:
-            raise ValueError("Keypoints required for keypoint-jigsaw strategy but none provided.")
+            with torch.no_grad():
+                # Move data to the same device as the model
+                data_gray = data.mean(dim=1, keepdim=True).to(device)
+                if data_gray.shape[1] == 1:
+                    data_gray = data_gray.repeat(1, 3, 1, 1)
+                keypoints_flat = model_keypoints(data_gray)
+                predicted_keypoints = keypoints_flat.view(data.shape[0], NUM_KEYPOINTS, 2)
 
     # --- Model Forward Pass ---
     with torch.no_grad():
         # The model's forward pass returns loss, prediction, and mask
-        loss, pred, mask = model(data, mask_ratio=MASK_RATIO, keypoints=predicted_keypoints)
+        loss, pred, mask = model(data, mask_ratio=MASK_RATIO, shuffle_ratio=MASK_RATIO, keypoints=predicted_keypoints)
 
     # --- Visualization ---
     recon_img = model.unpatchify(pred)
 
     # Create masked/shuffled image for visualization
-    if masking_strategy in ["keypoints-jigsaw", "random-jigsaw"]:
+    if masking_strategy in ["keypoints-jigsaw", "random-jigsaw", "keypoints-grouped-jigsaw"]:
         # For jigsaw, the input is shuffled. We create a representative shuffled image for visualization.
         # Note: This shuffle is random and may not be the exact one used in the forward pass.
         patches = model.patchify(data)
         if masking_strategy == "keypoints-jigsaw":
             shuffled_patches, _, _ = model.keypoint_jigsaw_masking(patches, predicted_keypoints)
+        elif masking_strategy == "keypoints-grouped-jigsaw":
+            shuffled_patches, _, _ = model.keypoint_grouped_jigsaw_masking(patches, predicted_keypoints)
         else:  # random-jigsaw
             shuffled_patches, _, _ = model.random_jigsaw_masking(patches, MASK_RATIO)
         masked_img = model.unpatchify(shuffled_patches)

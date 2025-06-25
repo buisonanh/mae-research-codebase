@@ -218,6 +218,63 @@ class MaskedAutoencoderViT(nn.Module):
 
         return x_shuffled, mask, ids_restore
 
+    def keypoint_grouped_jigsaw_masking(self, x, keypoints, group_size=2):
+        """
+        Perform jigsaw shuffling on groups of patches containing keypoints.
+        A group is a square of group_size x group_size patches.
+        No masking is applied. The full shuffled sequence is returned.
+        The reconstruction target is the original, unshuffled patch sequence.
+        """
+        N, L, D = x.shape
+        grid_h, grid_w = self.patch_embed.grid_size
+        assert grid_h == grid_w, "Patch grid must be square"
+        assert grid_h % group_size == 0, "Grid dimension must be divisible by group size"
+        
+        # Jigsaw shuffle based on keypoints
+        if keypoints.ndim == 2:
+            keypoints = keypoints.unsqueeze(0)
+        keypoints = keypoints.clamp(min=0.0, max=0.999)
+        keypoints_scaled = keypoints.clone()
+        keypoints_scaled[:, :, 0] = keypoints[:, :, 0] * grid_w
+        keypoints_scaled[:, :, 1] = keypoints[:, :, 1] * grid_h
+        
+        x_shuffled = x.clone()
+        for i in range(N):
+            groups_to_shuffle = set()
+            for kp in keypoints_scaled[i]:
+                col = int(kp[0].item())
+                row = int(kp[1].item())
+                
+                group_col = col // group_size
+                group_row = row // group_size
+                groups_to_shuffle.add((group_row, group_col))
+
+            if not groups_to_shuffle:
+                continue
+
+            patch_indices_to_shuffle = []
+            for group_row, group_col in groups_to_shuffle:
+                for r_offset in range(group_size):
+                    for c_offset in range(group_size):
+                        row = group_row * group_size + r_offset
+                        col = group_col * group_size + c_offset
+                        idx = row * grid_w + col
+                        patch_indices_to_shuffle.append(idx)
+            
+            if len(patch_indices_to_shuffle) > 1:
+                patch_indices = torch.tensor(sorted(list(set(patch_indices_to_shuffle))), device=x.device, dtype=torch.long)
+                shuffled_order = torch.randperm(len(patch_indices), device=x.device)
+                shuffled_patches = x[i, patch_indices, :][shuffled_order]
+                x_shuffled[i, patch_indices, :] = shuffled_patches
+
+        # No patches are masked, so the mask is all ones
+        mask = torch.ones([N, L], device=x.device)
+        
+        # No patches are removed, so ids_restore is an identity mapping
+        ids_restore = torch.arange(L, device=x.device).unsqueeze(0).repeat(N, 1)
+
+        return x_shuffled, mask, ids_restore
+
     def forward_encoder(self, x, mask_ratio, shuffle_ratio, keypoints):
         # embed patches
         x = self.patch_embed(x)
@@ -232,6 +289,8 @@ class MaskedAutoencoderViT(nn.Module):
             x, mask, ids_restore = self.random_jigsaw_masking(x, shuffle_ratio)
         elif self.masking_strategy == "keypoints-jigsaw":
             x, mask, ids_restore = self.keypoint_jigsaw_masking(x, keypoints)
+        elif self.masking_strategy == "keypoints-grouped-jigsaw":
+            x, mask, ids_restore = self.keypoint_grouped_jigsaw_masking(x, keypoints, group_size=2)
         else:
             raise ValueError(f"Unknown masking strategy: {self.masking_strategy}")
 

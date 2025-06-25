@@ -7,7 +7,7 @@ DEVICE = torch.device('cuda:1')
 
 # Dataset parameters
 TARGET_SIZE = 224
-BATCH_SIZE = 128
+BATCH_SIZE = 96
 NUM_WORKERS = 4
 PRETRAIN_DATASET_NAME = "affectnet"  # Dataset for pretraining
 CLASSIFY_DATASET_NAME = "rafdb"  # Dataset for classification
@@ -19,7 +19,7 @@ NUM_CLASSES = {
 ENCODER_MODEL = "vit_base_p16"
 
 # Maskng strategy
-MASKING_STRATEGY = "keypoints-jigsaw" # "keypoints-jigsaw", "random-jigsaw", "random"
+MASKING_STRATEGY = "keypoints-grouped-jigsaw" # "keypoints-jigsaw", "random-jigsaw", "random", "keypoints-grouped-jigsaw", "combined-keypoints-jigsaw-random-mask"
 
 # For keypoints-based jigsaw masking
 NUM_KEYPOINTS = 15
@@ -31,8 +31,8 @@ MASK_RATIO = 0.75
 PATCH_SIZE = 16
 
 # Training parameters
-AUTOENCODER_NUM_EPOCHS = 20
-CLASSIFIER_NUM_EPOCHS = 50
+AUTOENCODER_NUM_EPOCHS = 1 #20
+CLASSIFIER_NUM_EPOCHS = 1 #50
 KEYPOINT_NUM_EPOCHS = 20
 
 LEARNING_RATE = 0.001
