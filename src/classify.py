@@ -24,10 +24,12 @@ def create_model(weights_path=None, num_classes=None, checkpoint_path=None):
     if num_classes is None:
         num_classes = NUM_CLASSES[CLASSIFY_DATASET_NAME]
 
-    if ENCODER_MODEL == 'vit_base_patch16':
+    if ENCODER_MODEL == 'vit_base_patch16' or ENCODER_MODEL == 'vit_base_p16':
         encoder_model = 'vit_base_patch16_224'
-    elif ENCODER_MODEL == 'deit_base_distilled_patch16':
-        encoder_model = 'deit_base_distilled_patch16_224'
+    elif ENCODER_MODEL == 'vit_large_patch16':
+        encoder_model = 'vit_large_patch16_224'
+    elif ENCODER_MODEL == 'vit_huge_patch14':
+        encoder_model = 'vit_huge_patch14_224'
     else:
         raise ValueError(f"Unknown encoder model: {ENCODER_MODEL}")
 
