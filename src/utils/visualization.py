@@ -130,18 +130,21 @@ def save_reconstruction_samples(model, model_keypoints, test_loader, device, sav
     for i in range(num_show):
         # Original Image
         orig_display = data_cpu[i].permute(1, 2, 0).numpy()
+        orig_display = np.clip(orig_display * 0.5 + 0.5, 0, 1)  # Denormalize
         ax[0, i].imshow(orig_display)
         ax[0, i].set_title(f"Original Image {i+1}")
         ax[0, i].axis('off')
 
         # Masked/Shuffled Image
         masked_display = masked_cpu[i].permute(1, 2, 0).numpy()
+        masked_display = np.clip(masked_display * 0.5 + 0.5, 0, 1)  # Denormalize
         ax[1, i].imshow(masked_display)
         ax[1, i].set_title(f"{masked_title} {i+1}")
         ax[1, i].axis('off')
 
         # Reconstructed Image
         recon_display = recon_cpu[i].permute(1, 2, 0).numpy()
+        recon_display = np.clip(recon_display * 0.5 + 0.5, 0, 1)  # Denormalize
         ax[2, i].imshow(recon_display)
         ax[2, i].set_title(f"Reconstructed Image {i+1}")
         ax[2, i].axis('off')
