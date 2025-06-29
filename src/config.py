@@ -1,6 +1,5 @@
 import torch
 import os
-import json
 
 # Device configuration
 DEVICE = torch.device(os.environ.get('DEVICE', 'cuda:2'))
@@ -9,13 +8,13 @@ DEVICE = torch.device(os.environ.get('DEVICE', 'cuda:2'))
 TARGET_SIZE = 96
 BATCH_SIZE = 512
 NUM_WORKERS = 4
-import os
 
 PRETRAIN_DATASET_NAME = os.environ.get('PRETRAIN_DATASET_NAME', 'affectnet')
-CLASSIFY_DATASET_NAME = os.environ.get('CLASSIFY_DATASET_NAME', 'rafdb')
+CLASSIFY_DATASET_NAME = os.environ.get('CLASSIFY_DATASET_NAME', 'ferplus')
 NUM_CLASSES = {
     "rafdb": 7,  # For RAF-DB dataset
-    "affectnet": 8  # For AffectNet dataset
+    "affectnet": 8,  # For AffectNet dataset
+    "ferplus": 7  # For FER+ dataset
 }
 
 ENCODER_MODEL = os.environ.get('ENCODER_MODEL', 'resnet18') # [resnet18, convnextv2_tiny]
@@ -52,12 +51,13 @@ STD = [0.5, 0.5, 0.5]
 DATASET_PATHS = {
     "rafdb": "datasets/raf-db-dataset/DATASET",
     "affectnet": "datasets/affectnet/AffectNet",
+    "ferplus": "datasets/fer_plus",
     "keypoints": "datasets/keypoints/training_data/training.csv"
 }
 
 # Model save paths
 
-SAVE_PATH = f"results_{ENCODER_MODEL}_{PRETRAIN_DATASET_NAME}_{CLASSIFY_DATASET_NAME}_{MASKING_STRATEGY}_mr{MASK_RATIO}_lr{LEARNING_RATE}_mean{MEAN}_std{STD}"
+SAVE_PATH = f"results_{ENCODER_MODEL}_{PRETRAIN_DATASET_NAME}_{CLASSIFY_DATASET_NAME}_{MASKING_STRATEGY}_mr{MASK_RATIO}_lr{LEARNING_RATE}"
 
 PRETRAIN_FOLDER = os.path.join(SAVE_PATH, f'pretrain_checkpoints')
 CLASSIFICATION_FOLDER = os.path.join(SAVE_PATH, f'classification_checkpoints')
