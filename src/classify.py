@@ -41,6 +41,15 @@ def create_model(weights_path=None, num_classes=None):
         # No need to manually replace fc or global_pool if num_classes is set appropriately.
         # timm handles creating a suitable head.
 
+    if weights_path == "default":
+        # Load PyTorch default pretrained weights and let timm handle the classifier head
+        print(f"Loading PyTorch non-pretrained {ENCODER_MODEL} with {num_classes} classes.")
+        model = timm.create_model(
+            model_name=ENCODER_MODEL,
+            pretrained=True,
+            num_classes=num_classes  # This ensures the model has the correct output shape
+        )
+    
     else:
         # Load weights from a specified checkpoint file (e.g., MAE encoder)
         # First, create the base model without a classification head (num_classes=0 for feature extraction)
