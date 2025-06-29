@@ -24,78 +24,78 @@ def create_model(weights_path=None, num_classes=None):
 
     Args:
         weights_path: Optional path to a pretrained checkpoint. If "default", uses PyTorch default
-                      pretrained weights for the ENCODER_MODEL. If None, the model is not pretrained.
+                      pretrained weights. If None, the model is not pretrained.
         num_classes: Number of output classes. If None, uses the value from config.
+
+    Returns:
+        A tuple of (model, weights_loaded_flag).
     """
     if num_classes is None:
         num_classes = NUM_CLASSES[CLASSIFY_DATASET_NAME]
 
+    weights_loaded = False
+
     # Case 1: Use "default" pretrained weights from PyTorch
     if weights_path == "default":
         print(f"Loading PyTorch pretrained {ENCODER_MODEL} with {num_classes} classes.")
-        model = timm.create_model(
-            model_name=ENCODER_MODEL,
-            pretrained=True,
-            num_classes=num_classes
-        )
+        model = timm.create_model(model_name=ENCODER_MODEL, pretrained=True, num_classes=num_classes)
+        weights_loaded = True
+        return model, weights_loaded
 
-    # Case 2: Load weights from a specific checkpoint file
-    elif weights_path is not None:
-        print(f"Creating base model {ENCODER_MODEL} for feature extraction (loading from path: {weights_path})")
-        feature_extractor = timm.create_model(
-            model_name=ENCODER_MODEL,
-            pretrained=False,  # We are loading weights from a file
-            num_classes=0,     # We want the feature extractor
-            global_pool=''     # Return a 4D feature map
-        )
+    # Case 2: No weights path provided, create a non-pretrained model
+    if weights_path is None:
+        print(f"Loading PyTorch non-pretrained {ENCODER_MODEL} with {num_classes} classes.")
+        model = timm.create_model(model_name=ENCODER_MODEL, pretrained=False, num_classes=num_classes)
+        weights_loaded = False
+        return model, weights_loaded
 
-        print(f"Loading pretrained weights from checkpoint: {weights_path}")
+    # Case 3: A specific checkpoint path is provided
+    if not os.path.exists(weights_path):
+        print(f"Warning: Checkpoint file not found at {weights_path}. Creating a new model with random weights.")
+        model = timm.create_model(model_name=ENCODER_MODEL, pretrained=False, num_classes=num_classes)
+        weights_loaded = False
+        return model, weights_loaded
+
+    # If we reach here, the file exists. Load it.
+    print(f"Creating base model {ENCODER_MODEL} for feature extraction (loading from path: {weights_path})")
+    feature_extractor = timm.create_model(
+        model_name=ENCODER_MODEL, pretrained=False, num_classes=0, global_pool=''
+    )
+
+    try:
         weights = torch.load(weights_path, map_location=DEVICE)
-
         if any(k.startswith("encoder.") for k in weights.keys()):
             print("Detected MAE-style encoder weights. Extracting and loading.")
             encoder_weights = {k.replace("encoder.", ""): v for k, v in weights.items() if k.startswith("encoder.")}
-            missing_keys, unexpected_keys = feature_extractor.load_state_dict(encoder_weights, strict=False)
+            feature_extractor.load_state_dict(encoder_weights, strict=False)
         elif 'model' in weights:
-            print("Detected 'model' key. Loading state_dict from weights['model'].")
-            missing_keys, unexpected_keys = feature_extractor.load_state_dict(weights['model'], strict=False)
+            feature_extractor.load_state_dict(weights['model'], strict=False)
         elif 'state_dict' in weights:
-            print("Detected 'state_dict' key. Loading state_dict from weights['state_dict'].")
-            missing_keys, unexpected_keys = feature_extractor.load_state_dict(weights['state_dict'], strict=False)
+            feature_extractor.load_state_dict(weights['state_dict'], strict=False)
         else:
-            print("Attempting to load weights directly.")
-            missing_keys, unexpected_keys = feature_extractor.load_state_dict(weights, strict=False)
+            feature_extractor.load_state_dict(weights, strict=False)
+        weights_loaded = True
+    except Exception as e:
+        print(f"Error loading weights from {weights_path}: {e}. Creating a new model with random weights.")
+        model = timm.create_model(model_name=ENCODER_MODEL, pretrained=False, num_classes=num_classes)
+        weights_loaded = False
+        return model, weights_loaded
 
-        if missing_keys:
-            print(f"Warning: Missing keys: {missing_keys}")
-        if unexpected_keys:
-            print(f"Warning: Unexpected keys: {unexpected_keys}")
+    try:
+        in_features = feature_extractor.num_features
+    except AttributeError:
+        temp_model = timm.create_model(ENCODER_MODEL, pretrained=False, num_classes=1)
+        in_features = temp_model.num_features
+        del temp_model
 
-        try:
-            in_features = feature_extractor.num_features
-        except AttributeError:
-            temp_model_for_features = timm.create_model(ENCODER_MODEL, pretrained=False, num_classes=1)
-            in_features = temp_model_for_features.num_features
-            del temp_model_for_features
-            print(f"Inferred in_features as {in_features}.")
+    model = nn.Sequential(
+        feature_extractor,
+        nn.AdaptiveAvgPool2d((1, 1)),
+        nn.Flatten(),
+        nn.Linear(in_features, num_classes)
+    )
 
-        model = nn.Sequential(
-            feature_extractor,
-            nn.AdaptiveAvgPool2d((1, 1)),
-            nn.Flatten(),
-            nn.Linear(in_features, num_classes)
-        )
-
-    # Case 3: No weights provided, create a non-pretrained model
-    else: # weights_path is None
-        print(f"Loading PyTorch non-pretrained {ENCODER_MODEL} with {num_classes} classes.")
-        model = timm.create_model(
-            model_name=ENCODER_MODEL,
-            pretrained=False,
-            num_classes=num_classes
-        )
-
-    return model
+    return model, weights_loaded
 
 def get_data_transforms():
     """Get data transforms for training and evaluation."""
@@ -173,7 +173,7 @@ def create_data_loaders():
     
     return train_loader, val_loader, test_loader
 
-def train_model(model, train_loader, val_loader, num_epochs=CLASSIFIER_NUM_EPOCHS):
+def train_model(model, train_loader, val_loader, classification_dir, num_epochs=CLASSIFIER_NUM_EPOCHS):
     """Train the classification model."""
     model = model.to(DEVICE)
     criterion = nn.CrossEntropyLoss()
@@ -186,9 +186,7 @@ def train_model(model, train_loader, val_loader, num_epochs=CLASSIFIER_NUM_EPOCH
     val_losses, val_accuracies = [], []
     best_val_loss = float('inf')
     
-    # Create classification checkpoint directory
-    classification_dir = CLASSIFICATION_FOLDER
-    os.makedirs(classification_dir, exist_ok=True)
+
     
     for epoch in range(num_epochs):
         # Training phase
@@ -278,7 +276,7 @@ def train_model(model, train_loader, val_loader, num_epochs=CLASSIFIER_NUM_EPOCH
     
     return train_losses, train_accuracies, val_losses, val_accuracies
 
-def evaluate_model(model, test_loader):
+def evaluate_model(model, test_loader, classification_dir):
     """Evaluate the model on test set and generate confusion matrix."""
     model.eval()
     criterion = nn.CrossEntropyLoss()
@@ -324,29 +322,30 @@ def evaluate_model(model, test_loader):
     plt.xlabel("Predicted Labels")
     plt.ylabel("True Labels")
     plt.tight_layout()
-    plt.savefig(os.path.join(CLASSIFICATION_FOLDER, "confusion_matrix.png"))
+    plt.savefig(os.path.join(classification_dir, "confusion_matrix.png"))
     plt.close()
     
     return test_loss, test_accuracy
 
-def save_metrics(final_pretrain_loss, test_loss, test_accuracy):
+def save_metrics(final_pretrain_loss, test_loss, test_accuracy, classification_dir):
     """Save all training metrics to a text file."""
     from src.utils.visualization import format_config_params
-    metrics_file = os.path.join(CLASSIFICATION_FOLDER, 'final_metrics.txt')
+    metrics_file = os.path.join(classification_dir, 'final_metrics.txt')
     
     with open(metrics_file, 'w') as f:
         # Write configuration parameters
         f.write(format_config_params())
         f.write("\n=== Final Training Metrics ===\n\n")
-        f.write("Pretraining:\n")
-        f.write(f"Final Loss: {final_pretrain_loss:.4f}\n\n")
+        if final_pretrain_loss is not None:
+            f.write("Pretraining:\n")
+            f.write(f"Final Loss: {final_pretrain_loss:.4f}\n\n")
         f.write("Classification:\n")
         f.write(f"Test Loss: {test_loss:.4f}\n")
         f.write(f"Test Accuracy: {test_accuracy:.2f}%\n")
 
-def plot_metrics(train_losses, val_losses, train_accuracies, val_accuracies):
+def plot_metrics(train_losses, val_losses, train_accuracies, val_accuracies, classification_dir):
     """Plot and save training metrics."""
-    metrics_dir = os.path.join(CLASSIFICATION_FOLDER, "metrics_plots")
+    metrics_dir = os.path.join(classification_dir, "metrics_plots")
     os.makedirs(metrics_dir, exist_ok=True)
     
     # Plot training and validation metrics
@@ -381,38 +380,38 @@ def main():
                         help='Path to a pretrained checkpoint to use for initialization')
     args = parser.parse_args()
     
+    # Load model and determine output directory
+    model, weights_loaded = create_model(weights_path=args.checkpoint)
+
+    if weights_loaded and args.checkpoint != "default":
+        # Use the predefined folder from config if a custom checkpoint was loaded
+        classification_dir = CLASSIFICATION_FOLDER
+    else:
+        # Create a new folder for training from scratch or from default pytorch weights
+        training_type = "from_pytorch_pretrain" if args.checkpoint == "default" else "from_scratch"
+        classification_dir = f"results_{ENCODER_MODEL}_{CLASSIFY_DATASET_NAME}_{training_type}_lr{CLASSIFIER_LEARNING_RATE}"
+
     # Create save directories
-    classification_dir = CLASSIFICATION_FOLDER
     os.makedirs(classification_dir, exist_ok=True)
     os.makedirs(os.path.join(classification_dir, 'metrics_plots'), exist_ok=True)
-    
-    # Load model with pretrained weights if specified
-    model = create_model(weights_path=args.checkpoint)
-    
+
     # Create data loaders
     train_loader, val_loader, test_loader = create_data_loaders()
-    
-    # Train model
-    print("Training classifier...")
-    metrics = train_model(model, train_loader, val_loader)
-    train_losses, train_accuracies, val_losses, val_accuracies = metrics
-    
+
+    # Train the model
+    train_losses, train_accuracies, val_losses, val_accuracies = train_model(
+        model, train_loader, val_loader, classification_dir, num_epochs=CLASSIFIER_NUM_EPOCHS
+    )
+
+    # Evaluate the model
+    test_loss, test_accuracy = evaluate_model(model, test_loader, classification_dir)
+
+    # Save final metrics
+    pretrain_loss = None  # No pretraining loss available in this script
+    save_metrics(pretrain_loss, test_loss, test_accuracy, classification_dir)
+
     # Plot metrics
-    plot_metrics(train_losses, val_losses, train_accuracies, val_accuracies)
-    
-    # Evaluate on test set
-    print("\nEvaluating on test set...")
-    test_loss, test_accuracy = evaluate_model(model, test_loader)
-    
-    # Try to read final pretraining loss
-    try:
-        with open(os.path.join(PRETRAIN_FOLDER, 'final_pretrain_loss.txt'), 'r') as f:
-            final_pretrain_loss = float(f.read().strip())
-    except (FileNotFoundError, ValueError):
-        final_pretrain_loss = float('nan')
-    
-    # Save all metrics
-    save_metrics(final_pretrain_loss, test_loss, test_accuracy)
+    plot_metrics(train_losses, val_losses, train_accuracies, val_accuracies, classification_dir)
 
 if __name__ == "__main__":
     main()
