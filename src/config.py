@@ -2,7 +2,7 @@ import torch
 import os
 
 # Device configuration
-DEVICE = torch.device(os.environ.get('DEVICE', 'cuda:2'))
+DEVICE = torch.device(os.environ.get('DEVICE', 'cuda:0'))
 
 # Dataset parameters
 TARGET_SIZE = 96
